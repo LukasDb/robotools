@@ -1,0 +1,5 @@
+*.pyc
+*.npz
+*.png
+**/__pychache__/**
+data/
