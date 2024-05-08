@@ -97,7 +97,7 @@ class SceneIntegration:
             )
 
     def render_depth(
-        self, w: int, h: int, intrinsics: np.ndarray, extrinsics: np.ndarray
+        self, w: int, h: int, intrinsics: np.ndarray, extrinsics: np.ndarray, depth_scale=1000.0
     ) -> np.ndarray:
         self.vbg = self.vbg.cuda()
         result = self.vbg.ray_cast(
@@ -107,7 +107,7 @@ class SceneIntegration:
             width=w,
             height=h,
             render_attributes=["depth"],  # "normal", "color", "index", "interp_ratio"],
-            depth_scale=1000.0,
+            depth_scale=depth_scale,
             depth_min=0.0,
             depth_max=5.0,
             weight_threshold=1,

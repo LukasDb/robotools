@@ -46,6 +46,13 @@ class BackgroundMonitor(rt.Entity):
         self.aruco_dict = None
         self.charuco_board = None
 
+    def disable(self):
+        # close tk window
+        self.window.destroy()
+
+    def enable(self):
+        self.__init__()
+
     def to_config(self) -> dict:
         out = super().to_config()
         return out
@@ -184,7 +191,9 @@ class BackgroundMonitor(rt.Entity):
         )
 
         full_img = np.zeros((height, width), dtype=np.uint8)
-        full_img[vert_pad : vert_pad + charuco_img.shape[0], hor_pad : hor_pad + charuco_img.shape[1]] = charuco_img
+        full_img[
+            vert_pad : vert_pad + charuco_img.shape[0], hor_pad : hor_pad + charuco_img.shape[1]
+        ] = charuco_img
 
         # charuco_img = cv2.copyMakeBorder(  # type: ignore
         #     charuco_img,
