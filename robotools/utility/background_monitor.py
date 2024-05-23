@@ -98,12 +98,18 @@ class BackgroundMonitor(rt.Entity):
 
     def set_to_depth_texture(self) -> None:
         # from https://dev.intelrealsense.com/docs/tuning-depth-cameras-for-best-performance
-        textured_folder = pathlib.Path("./intel_textured_patterns")
+        """ textured_folder = pathlib.Path("./intel_textured_patterns")
         textured_paths = list(textured_folder.iterdir())
         # choose the one that is closest to the current resolution
         textured_widths = [int(p.name.split("_")[5]) - self.width for p in textured_paths]
         selected = np.argmin(np.abs(textured_widths))
-        textured_path = textured_paths[selected]
+        textured_path = textured_paths[selected] """
+
+        textured_path = pathlib.Path("./intel_textured_patterns/Random_image_10_90_10_1280_720.png")
+        self._load_image_to_full_canvas(textured_path)
+
+    def set_to_black(self) -> None:
+        textured_path = pathlib.Path("./intel_textured_patterns/plain_black.jpg")
         self._load_image_to_full_canvas(textured_path)
 
     def _load_image_to_full_canvas(self, path: pathlib.Path) -> None:

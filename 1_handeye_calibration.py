@@ -11,7 +11,7 @@ import click
 import asyncio
 
 import robotools as rt
-from robotools.camera import Realsense, HandeyeCalibrator
+from robotools.camera import Realsense, HandeyeCalibrator, zed
 from robotools.trajectory import SphericalTrajectory, TrajectoryExecutor, CartesianTrajectory
 from robotools.robot import FanucCRX10iAL
 
@@ -26,6 +26,7 @@ async def async_main(capture: bool, output: Path) -> None:
 
     robot: FanucCRX10iAL = scene.add_entity(FanucCRX10iAL())
     cam: Realsense = scene.add_entity(Realsense.get_available_devices()[0])
+    #cam: zed = scene.add_entity(zed.ZedCamera.get_available_devices()[0])
     bg = scene.add_entity(rt.utility.BackgroundMonitor())
 
     calibrator = HandeyeCalibrator()
@@ -36,23 +37,23 @@ async def async_main(capture: bool, output: Path) -> None:
     if capture:
         executor = TrajectoryExecutor()
         trajectory = SphericalTrajectory(
-            thetas=np.linspace(-180, 90, 8, endpoint=True).tolist(),
-            pitchs=[25, 45, 65],
-            radius=[0.4, 0.5],
-            center_point=(0.367, -0.529, -0.16),
+            thetas=np.linspace(60, 300, 8, endpoint=True).tolist(),
+            pitchs=[50, 70],
+            radius=[0.45],
+            center_point=(0.83, 0, -0.16),
             view_jitter=(5, 5, 5),
         )
         trajectory += CartesianTrajectory(
-            (180, 0, 0),
-            np.linspace(0.0, 0.7, 8).tolist(),
-            np.linspace(-0.529 - 0.1, -0.529 + 0.1, 3).tolist(),
-            0.3,
+            (180, 0, 90),
+            np.linspace(0.83 - 0.1, 0.83 + 0.1, 3).tolist(), 
+            np.linspace(-0.3, 0.3, 6).tolist(),
+            0.5,
             view_jitter=(5, 5, 5),
         )
 
         trajectory.transform(extrinsic_guess, local=True)
 
-        trajectory.visualize()
+        #trajectory.visualize()
 
         # wait for user to move window to second screen
         input("Please move the window to the second screen and press enter")

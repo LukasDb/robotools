@@ -33,6 +33,7 @@ class TrajectoryExecutor:
                 to_cam = invert_homogeneous(cam.calibration.extrinsic_matrix)
 
         home_pose = await robot.get_pose()
+        
         if home_pose is None:
             logging.warning("Could not get robot home pose!")
             return

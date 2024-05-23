@@ -53,11 +53,11 @@ IOU_THRESHOLD = 0.7
 @click.option("--output", type=click.Path(path_type=Path), default="data/scene_construction")
 def main(capture: bool, output: Path) -> None:
     scene = rt.Scene()
-    scene.from_config(yaml.safe_load(open("scene.yaml")))
+    scene.from_config(yaml.safe_load(open("scene_combined.yaml")))
 
     # extract names from scene.yaml
     # cam: rt.camera.Camera = scene._entities["Realsense_121622061798"]
-    cam: rt.camera.Camera = scene._entities["ZED-M-12049762"]
+    cam: rt.camera.Camera = scene._entities["ZED-M"]
     bg: rt.utility.BackgroundMonitor = scene._entities["Background Monitor"]
     bg.disable()
     robot: rt.robot.Robot = scene._entities["crx"]
@@ -89,7 +89,7 @@ def main(capture: bool, output: Path) -> None:
 
     scene_mesh = scene_pcl.to_legacy()  # for testing
 
-    mesh_root_dir = Path("~/data/6IMPOSE/0_meshes/").expanduser().glob("*")
+    mesh_root_dir = Path("/home/aismart/Desktop/RGBD-capture/robotools/0_meshes").expanduser().glob("*")
     objs = {}
     for mesh_dir in mesh_root_dir:
         mesh_path = mesh_dir.joinpath(f"{mesh_dir.name}.obj")
@@ -452,7 +452,6 @@ def infer_poses(rgb: np.ndarray, depth: np.ndarray, intrinsics: np.ndarray) -> d
     )
 
     return response.json()
-
 
 if __name__ == "__main__":
     main()

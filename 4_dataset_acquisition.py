@@ -32,6 +32,7 @@ In this script:
 - we capture data similar to 2_scene_reconstrution, but without the projector and with different lighting/backgrounds etc
 - WE USE THE SAME POSES! therefore we can use the GT depth data from 2!
 - we take calibration from 1, the depth from 2, the poses from 3 and write them all to the output
+    -> should we then even capture ZED w/o projection in 2?
 
 
 WIP
@@ -40,11 +41,11 @@ WIP
 
 async def async_main(capture: bool, output: Path) -> None:
     scene = rt.Scene()
-    scene.from_config(yaml.safe_load(open("scene.yaml")))
+    scene.from_config(yaml.safe_load(open("scene_combined.yaml")))
 
     # extract names from scene.yaml
     # cam: rt.camera.Camera = scene._entities["Realsense_121622061798"]
-    cam: rt.camera.Camera = scene._entities["ZED-M-12049762"]
+    cam: rt.camera.Camera = scene._entities["ZED-M"]
 
     bg: rt.utility.BackgroundMonitor = scene._entities["Background Monitor"]
     bg.disable()
@@ -70,8 +71,8 @@ async def async_main(capture: bool, output: Path) -> None:
         thetas=np.linspace(-110, 270, 8, endpoint=False).tolist(),
         pitchs=[40, 50, 65, 75],
         radius=[0.4],
-        center_point=(0.68, 0.16, -0.16),
-        view_jitter=(5, 5, 5),
+        center_point=(0.68, 0.16, -0.16)
+        #,view_jitter=(5, 5, 5),
     )
 
     if capture:
@@ -125,7 +126,7 @@ async def async_main(capture: bool, output: Path) -> None:
         ],
     ).enumerate()
 
-    mesh_root_dir = Path("~/data/6IMPOSE/0_meshes/").expanduser().glob("*")
+    mesh_root_dir = Path("/home/aismart/Desktop/RGBD-capture/robotools/0_meshes").expanduser().glob("*")
     objs = {}
     for mesh_dir in mesh_root_dir:
         mesh_path = mesh_dir.joinpath(f"{mesh_dir.name}.obj")

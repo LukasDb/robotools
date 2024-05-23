@@ -28,16 +28,16 @@ class FanucCRX10iAL(Robot):
     def to_config(self) -> dict:
         return super().to_config()
 
-    async def move_to(self, pose: np.ndarray, timeout: float = 20.0) -> bool:
+    async def move_to(self, pose: np.ndarray, timeout: float = 40.0) -> bool:
         t_started = time.time()
         await self.send_move(pose)
         dist_to_target = 100.0
         while dist_to_target > 0.001:
             await asyncio.sleep(0.2)
-            if time.time() - t_started > timeout:
+            """ if time.time() - t_started > timeout:
                 await self.stop()
                 raise TargetNotReachedError(f"Move timed out after {timeout} seconds")
-
+ """
             current = await self.get_pose()
             if current is not None:
                 dist_to_target = distance_from_matrices(current, pose)

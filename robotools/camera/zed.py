@@ -3,6 +3,7 @@ import numpy as np
 from typing import List
 import cv2
 import logging
+import pyzed.sl as sl
 # import pyzed.sl as sl
 
 
@@ -38,7 +39,7 @@ class ZedCamera(Camera):
     def __init__(self, serial_number: str = '9999') -> None:
         #added a default serial number to prevent an error in script 2
         self._serial_number = serial_number
-        return
+        #return
 
         self.init_params = sl.InitParameters()
         self.init_params.sdk_verbose = 0  # 1 for verbose
