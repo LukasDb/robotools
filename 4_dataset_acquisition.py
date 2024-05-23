@@ -43,7 +43,9 @@ async def async_main(capture: bool, output: Path) -> None:
     scene.from_config(yaml.safe_load(open("scene.yaml")))
 
     # extract names from scene.yaml
-    cam: rt.camera.Camera = scene._entities["Realsense_121622061798"]
+    # cam: rt.camera.Camera = scene._entities["Realsense_121622061798"]
+    cam: rt.camera.Camera = scene._entities["ZED-M-12049762"]
+
     bg: rt.utility.BackgroundMonitor = scene._entities["Background Monitor"]
     bg.disable()
     robot: rt.robot.Robot = scene._entities["crx"]

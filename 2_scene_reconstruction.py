@@ -26,7 +26,9 @@ async def async_main(capture: bool, output: Path) -> None:
     scene.from_config(yaml.safe_load(open("scene.yaml")))
 
     # extract names from scene.yaml
-    cam: rt.camera.Camera = scene._entities["Realsense_121622061798"]
+    # cam: rt.camera.Camera = scene._entities["Realsense_121622061798"]
+    cam: rt.camera.Camera = scene._entities["ZED-M-12049762"]
+
     bg: rt.utility.BackgroundMonitor = scene._entities["Background Monitor"]
     robot: rt.robot.Robot = scene._entities["crx"]
 
@@ -79,7 +81,7 @@ async def async_main(capture: bool, output: Path) -> None:
                     cam_quat_xyzw=cam_rot,
                 )
                 writer.write_data(step, render_product=rp)
-
+    bg.disable()
     # 3) reconstruct
     # output = Path("~/data/real/occluded_cpsduck_realsense_121622061798").expanduser()
     # output = Path("~/data/real/single_cpsduck_realsense_121622061798").expanduser()
@@ -128,14 +130,10 @@ async def async_main(capture: bool, output: Path) -> None:
     mesh.compute_triangle_normals()
     mesh.compute_vertex_normals()
     mesh = mesh.to_legacy()
-    obj = o3d.io.read_triangle_mesh(
-        str(Path("~/data/6IMPOSE/0_meshes/cpsduck/cpsduck.obj").expanduser()), True
-    )
-    obj = obj.translate((0.68, 0.16, -0.16))
 
     origin = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
 
-    o3d.visualization.draw_geometries([mesh, obj, origin])
+    o3d.visualization.draw_geometries([mesh,origin])
 
     n_prev = 5
     fig, axs = plt.subplots(n_prev, 3)

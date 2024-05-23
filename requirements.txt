@@ -4,3 +4,4 @@ coloredlogs
 screeninfo
 aiohttp
 click
+trimesh

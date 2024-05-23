@@ -13,7 +13,7 @@ class BBox:
     def get_from_mask(mask: np.ndarray, object_id: int = 1) -> "BBox":
         y, x = np.where(mask == object_id)
         if len(y) == 0:
-            return (0, 0, 0, 0)
+            return BBox(0, 0, 0, 0)
         x1 = np.min(x).tolist()
         x2 = np.max(x).tolist()
         y1 = np.min(y).tolist()
