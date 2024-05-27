@@ -3,3 +3,6 @@
 *.png
 **/__pychache__/**
 data/
+*.yaml
+*.json
+*.npz
