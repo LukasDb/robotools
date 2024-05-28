@@ -119,6 +119,7 @@ You will be asked to pick points from the object mesh and from the scene. This w
         option = handle_user_input(obj_poses)
         if option == "pick_object":
             chosen_mesh_name, mesh_pcd, mesh_picked_points = define_target(objs)
+            chosen_mesh = objs[chosen_mesh_name]
         elif option == "quit":
             break
 
