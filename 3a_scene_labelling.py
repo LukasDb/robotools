@@ -54,8 +54,6 @@ You will be asked to pick points from the object mesh and from the scene. This w
     scene.from_config(yaml.safe_load(open("scene.yaml")))
 
     # extract names from scene.yaml
-    # cam: rt.camera.Camera = scene._entities["Realsense_121622061798"]
-    cam: rt.camera.Camera = scene._entities["ZED-M-12049762"]
     bg: rt.utility.BackgroundMonitor = scene._entities["Background Monitor"]
     bg.disable()
     robot: rt.robot.Robot = scene._entities["crx"]
@@ -65,16 +63,22 @@ You will be asked to pick points from the object mesh and from the scene. This w
 
     print("Loaded.")
 
+    print("Extracting scene...")
     scene_pcd_t = scene_integration.vbg.extract_point_cloud()
     scene_pcd = scene_pcd_t.to_legacy()
+    
+    # alternative: using mesh
+    # scene_mesh_t = scene_integration.vbg.extract_triangle_mesh()
+    # print("Sampling points...")
+    # scene_pcd = scene_mesh_t.to_legacy().sample_points_poisson_disk(200_000)
+    # print("Copying to GPU...")
+    # scene_pcd_t = o3d.t.geometry.PointCloud.from_legacy(scene_pcd).cuda()
 
     mesh_root_dir = Path("~/data/6IMPOSE/0_meshes/").expanduser().glob("*")
     objs = OrderedDict()
     for mesh_dir in mesh_root_dir:
         mesh_path = mesh_dir.joinpath(f"{mesh_dir.name}.obj")
         objs[mesh_dir.name] = o3d.io.read_triangle_mesh(str(mesh_path), True)
-
-    choose_object = True
 
     obj_poses: dict[str, list[np.ndarray]] = {}
 
@@ -235,10 +239,10 @@ def icp_refinement(
         return False, initial_pose
 
     # params
-    MAX_ITERATIONS = 30
+    MAX_ITERATIONS = 100
     FITNESS_THRESHOLD = 0.021
     INLIER_RMSE_THRESHOLD = 0.0065
-    MAX_CORRESPONDENCE_DISTANCE = 0.015
+    MAX_CORRESPONDENCE_DISTANCE = 0.03
 
     mu, sigma = 0, 0.1  # mean and standard deviation
     treg = o3d.t.pipelines.registration

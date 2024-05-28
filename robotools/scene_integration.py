@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 class SceneIntegration:
-    def __init__(self, use_color: bool = True, voxel_size=3/ 1024, block_resolution=16):
+    def __init__(self, use_color: bool = True, voxel_size=3 / 1024, block_resolution=16):
         self.device = o3c.Device("cuda:0")
         # self.device = o3c.Device("cpu:0")
 
@@ -99,21 +99,14 @@ class SceneIntegration:
     def render_depth(
         self, w: int, h: int, intrinsics: np.ndarray, extrinsics: np.ndarray, depth_scale=1000.0
     ) -> np.ndarray:
-        self.vbg = self.vbg.cuda()
-        result = self.vbg.ray_cast(
-            block_coords=self.vbg.hashmap().key_tensor(),
-            intrinsic=intrinsics,
-            extrinsic=extrinsics,
-            width=w,
-            height=h,
-            render_attributes=["depth"],  # "normal", "color", "index", "interp_ratio"],
-            depth_scale=depth_scale,
-            depth_min=0.0,
-            depth_max=5.0,
-            weight_threshold=1,
-            range_map_down_factor=8,
-        )
-        return result["depth"].cpu().numpy()[..., 0]
+        mesh = self.vbg.extract_triangle_mesh().cpu()
+        scene = o3d.t.geometry.RaycastingScene()
+        rays = o3d.t.geometry.RaycastingScene.create_rays_pinhole(intrinsics, extrinsics, w, h)
+        scene.add_triangles(mesh)
+        result = scene.cast_rays(rays)
+        depth = result["t_hit"].cpu().numpy()
+        depth[depth > 5.0] = 0.0  # 5m is the max depth
+        return depth * depth_scale
 
     def save(self, path: Path = Path("vbg.npz")):
         self.vbg.save(str(path))
