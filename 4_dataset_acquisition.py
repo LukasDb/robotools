@@ -41,7 +41,7 @@ WIP
 
 async def async_main(capture: bool, output: Path) -> None:
     scene = rt.Scene()
-    scene.from_config(yaml.safe_load(open("scene_combined.yaml")))
+    scene.from_config(yaml.safe_load(open("scene.yaml")))
 
     # extract names from scene.yaml
     # cam: rt.camera.Camera = scene._entities["Realsense_121622061798"]
@@ -126,7 +126,7 @@ async def async_main(capture: bool, output: Path) -> None:
         ],
     ).enumerate()
 
-    mesh_root_dir = Path("/home/aismart/Desktop/RGBD-capture/robotools/0_meshes").expanduser().glob("*")
+    mesh_root_dir = Path("~/data/6IMPOSE/0_meshes").expanduser().glob("*")
     objs = {}
     for mesh_dir in mesh_root_dir:
         mesh_path = mesh_dir.joinpath(f"{mesh_dir.name}.obj")
@@ -149,6 +149,11 @@ async def async_main(capture: bool, output: Path) -> None:
             rgb = data[tfds.RGB].numpy()
             rgb_annotated = rgb.copy()
 
+            try:
+                rgb_R = data[tfds.RGB_R].numpy()
+            except KeyError:
+                rgb_R = None
+
             intrinsics = data[tfds.CAM_MATRIX].numpy().astype(np.float64)
 
             depth_reconst = scene_integration.render_depth(
@@ -158,6 +163,7 @@ async def async_main(capture: bool, output: Path) -> None:
                 invert_homogeneous(cam_pose).astype(np.float64),
                 depth_scale=1.0,
             )
+
             depth_raw = data[tfds.DEPTH].numpy()
 
             depth_rendered = np.ones_like(depth_raw) * 1000.0
@@ -228,7 +234,7 @@ async def async_main(capture: bool, output: Path) -> None:
             cam_rot = R.from_matrix(cam_pose[:3, :3]).as_quat(True)
             datapoint = sp.RenderProduct(
                 rgb=rgb,
-                # rgb_R=rgb_R,
+                rgb_R=rgb_R,
                 depth=depth_raw,
                 depth_GT=depth_reconst,
                 # depth_GT_R=depth_rendered,
@@ -239,30 +245,6 @@ async def async_main(capture: bool, output: Path) -> None:
                 objs=object_labels,
             )
             writer.write_data(step, render_product=datapoint)
-
-            continue
-
-            fig, axs = plt.subplots(3, 2)
-
-            axs[0, 1].imshow(color_depth(depth_raw))
-            axs[0, 1].set_title("depth (Realsense)")
-
-            axs[1, 1].imshow(color_depth(depth_reconst))
-            axs[1, 1].set_title("depth (Reconstructed)")
-
-            axs[2, 1].imshow(color_depth(depth_rendered))
-            axs[2, 1].set_title("depth (from pose)")
-
-            axs[0, 0].imshow(rgb)
-            axs[0, 0].set_title("RGB")
-
-            axs[1, 0].imshow(occlusion_mask)
-            axs[1, 0].set_title("occluded mask")
-
-            axs[2, 0].imshow(rgb_annotated)
-
-            plt.show()
-            plt.close()
 
 
 def color_depth(depth: np.ndarray, d_min=0.0, d_max=1.0) -> np.ndarray:
