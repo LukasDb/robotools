@@ -38,9 +38,8 @@ IOU_THRESHOLD = 0.7
 
 
 @click.command()
-@click.option("--capture", is_flag=True)
-@click.option("--output", type=click.Path(path_type=Path), default="data/scene_construction")
-def main(capture: bool, output: Path) -> None:
+@click.argument("vbg_path", type=click.Path(path_type=Path), default="vbg.npz")
+def main(vbg_path: Path) -> None:
     print(
         """-- 3a Scene Labelling --
 This script is used to label objects in the scene. Using the voxel grid of the reconstructed scene of script #2, here you have to manually annotated the pose of the objects.
@@ -50,23 +49,31 @@ You will be asked to pick points from the object mesh and from the scene. This w
 3) View the refined pose and either accept or reject it.
 4) Add more of the same objects, choose different objects or exit the program."""
     )
-    scene = rt.Scene()
-    scene.from_config(yaml.safe_load(open("scene.yaml")))
-
-    # extract names from scene.yaml
-    bg: rt.utility.BackgroundMonitor = scene._entities["Background Monitor"]
-    bg.disable()
-    robot: rt.robot.Robot = scene._entities["crx"]
-
     scene_integration = rt.SceneIntegration(use_color=True)
-    scene_integration.load()
+    scene_integration.load(vbg_path)
 
     print("Loaded.")
 
     print("Extracting scene...")
     scene_pcd_t = scene_integration.vbg.extract_point_cloud()
     scene_pcd = scene_pcd_t.to_legacy()
-    
+
+    print("Demo for manual geometry cropping")
+    print("1) Press 'K' to lock screen and to switch to selection mode")
+    print("2) Drag for rectangle selection,")
+    print("   or use ctrl + left click for polygon selection")
+    print("3) Press 'C' to get a selected geometry")
+    print("4) Press 'F' to switch to freeview mode")
+
+    vis = o3d.visualization.VisualizerWithEditing()
+    vis.create_window()
+    vis.add_geometry(scene_pcd)
+    vis.run()
+    vis.destroy_window()
+
+    scene_pcd = vis.get_cropped_geometry()
+    scene_pcd_t = o3d.t.geometry.PointCloud.from_legacy(scene_pcd).cuda()
+
     # alternative: using mesh
     # scene_mesh_t = scene_integration.vbg.extract_triangle_mesh()
     # print("Sampling points...")
@@ -80,7 +87,19 @@ You will be asked to pick points from the object mesh and from the scene. This w
         mesh_path = mesh_dir.joinpath(f"{mesh_dir.name}.obj")
         objs[mesh_dir.name] = o3d.io.read_triangle_mesh(str(mesh_path), True)
 
-    obj_poses: dict[str, list[np.ndarray]] = {}
+    outpath = vbg_path.parent.joinpath("labelled_objects.json")
+
+    if outpath.exists():
+        with outpath.open("r") as f:
+            obj_poses: dict[str, list[np.ndarray]] = json.load(f)
+            for name, poses in obj_poses.items():
+                obj_poses[name] = [np.array(pose) for pose in poses]
+
+            print("Found existing poses. Will be adding to these.")
+            draw_registration_results(scene_pcd, objs, obj_poses)
+
+    else:
+        obj_poses: dict[str, list[np.ndarray]] = {}
 
     chosen_mesh_name, mesh_pcd, mesh_picked_points = define_target(objs)
     chosen_mesh = objs[chosen_mesh_name]
@@ -88,6 +107,11 @@ You will be asked to pick points from the object mesh and from the scene. This w
     while True:
         # pick points from two point clouds and builds correspondences
         source_points = pick_points(scene_pcd, objs, obj_poses)
+
+        if len(source_points) < 3:
+            print("Not enough points picked. Please pick at least 3 points.")
+            continue
+
         T_registered = register_via_correspondences(
             scene_pcd, mesh_pcd, source_points, mesh_picked_points
         )
@@ -116,15 +140,19 @@ You will be asked to pick points from the object mesh and from the scene. This w
         print("All registered objects (Press 'Q' to continue):")
         draw_registration_results(scene_pcd, objs, obj_poses)
 
-        option = handle_user_input(obj_poses)
+        option = handle_user_input()
         if option == "pick_object":
             chosen_mesh_name, mesh_pcd, mesh_picked_points = define_target(objs)
             chosen_mesh = objs[chosen_mesh_name]
         elif option == "quit":
             break
+        elif option == "dump_and_quit":
+            with outpath.open("w") as f:
+                json.dump(obj_poses, f, default=lambda x: x.tolist(), indent=2)
+            break
 
 
-def handle_user_input(obj_poses) -> str:
+def handle_user_input() -> str:
     print("1: Add the same object again")
     print("2: Choose a different object or pick different points")
     print("3: Exit and write to file")
@@ -136,17 +164,15 @@ def handle_user_input(obj_poses) -> str:
     elif option == "2":
         return "pick_object"
     elif option == "3":
-        with open("labelled_objects.json", "w") as f:
-            json.dump(obj_poses, f, default=lambda x: x.tolist(), indent=2)
-        return "quit"
+        return "dump_and_quit"
     elif option == "4":
         if input("Are you sure? (y/n):") == "y":
             return "quit"
         else:
-            handle_user_input(obj_poses)
+            handle_user_input()
     else:
         print("Invalid option. Please choose again.")
-        handle_user_input(obj_poses)
+        handle_user_input()
 
 
 def define_target(
@@ -165,6 +191,10 @@ def define_target(
     chosen_mesh = objs[mesh_name]
     mesh_pcd = chosen_mesh.sample_points_poisson_disk(20_000)
     mesh_picked_points = pick_points(mesh_pcd)
+
+    if len(mesh_picked_points) < 3:
+        print("Not enough points picked. Please pick at least 3 points.")
+        return define_target(objs)
     return mesh_name, mesh_pcd, mesh_picked_points
 
 
@@ -240,12 +270,12 @@ def icp_refinement(
         return False, initial_pose
 
     # params
-    MAX_ITERATIONS = 100
+    MAX_ITERATIONS = 10
     FITNESS_THRESHOLD = 0.021
     INLIER_RMSE_THRESHOLD = 0.0065
-    MAX_CORRESPONDENCE_DISTANCE = 0.03
+    MAX_CORRESPONDENCE_DISTANCE = 0.003
 
-    mu, sigma = 0, 0.1  # mean and standard deviation
+    sigma = 0.0001  # mean and standard deviation
     treg = o3d.t.pipelines.registration
     estimation = treg.TransformationEstimationPointToPlane(
         treg.robust_kernel.RobustKernel(treg.robust_kernel.RobustKernelMethod.TukeyLoss, sigma)
