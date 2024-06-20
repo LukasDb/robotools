@@ -28,7 +28,10 @@ async def async_main(capture: bool, output: Path) -> None:
 
     # extract names from scene.yaml
     cam_RS: rt.camera.Camera = scene._entities["Realsense_121622061798"]
+    
     cam_ZED: rt.camera.Camera = scene._entities["ZED-M"]
+    
+
     bg: rt.utility.BackgroundMonitor = scene._entities["Background Monitor"]
     robot: rt.robot.Robot = scene._entities["crx"]
     output_buffer = output
@@ -174,7 +177,7 @@ async def async_main(capture: bool, output: Path) -> None:
             start_index=0,
             end_index=len(trajectory) - 1,
         )
-        with sp.writers.TFRecordWriter(writer_params, None) as writer:
+        """ with sp.writers.TFRecordWriter(writer_params, None) as writer:
             print("Starting capturing with ZED NO Pattern...")
             input("Please turn ON the ceiling lights and press enter")
             async for step in executor.execute(robot, trajectory, cam=cam_ZED):
@@ -192,7 +195,7 @@ async def async_main(capture: bool, output: Path) -> None:
                     cam_position=cam_pos,
                     cam_quat_xyzw=cam_rot,
                 )  
-                writer.write_data(step, render_product=rp)
+                writer.write_data(step, render_product=rp) """
     # 3) reconstruct
     # output = Path("~/data/real/occluded_cpsduck_realsense_121622061798").expanduser()
     # output = Path("~/data/real/single_cpsduck_realsense_121622061798").expanduser()
@@ -238,7 +241,7 @@ async def async_main(capture: bool, output: Path) -> None:
             tfds.DEPTH,
         ],
     ).enumerate()
-    output = output_buffer / "ZEDnP"
+    """ output = output_buffer / "ZEDnP"
     dataset_4 = tfds.get(
         output,
         get_keys=[
@@ -250,7 +253,7 @@ async def async_main(capture: bool, output: Path) -> None:
             tfds.RGB,
             tfds.DEPTH,
         ],
-    ).enumerate()
+    ).enumerate() """
 
 
     # only select every nth image (for demo data)
@@ -300,7 +303,7 @@ async def async_main(capture: bool, output: Path) -> None:
                 data[tfds.CAM_MATRIX].numpy(),
                 extrinsic,
             )
-        for i, data in tqdm(dataset_4, total=len(trajectory), desc="Reconstructing..."):
+        """ for i, data in tqdm(dataset_4, total=len(trajectory), desc="Reconstructing..."):
             t = data[tfds.CAM_LOCATION]
             r = R.from_quat(data[tfds.CAM_ROTATION].numpy())  # xyzw quaternion
             extrinsic = np.eye(4)
@@ -312,8 +315,8 @@ async def async_main(capture: bool, output: Path) -> None:
                 data[tfds.DEPTH].numpy(),
                 data[tfds.CAM_MATRIX].numpy(),
                 extrinsic,
-            )            
-        scene_integration.save()
+            )    """         
+        scene_integration.save(output_buffer.parent.joinpath("vbg.npz"))
     else:
         scene_integration.load()
 

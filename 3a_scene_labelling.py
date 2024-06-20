@@ -51,7 +51,7 @@ You will be asked to pick points from the object mesh and from the scene. This w
 4) Add more of the same objects, choose different objects or exit the program."""
     )
     scene = rt.Scene()
-    scene.from_config(yaml.safe_load(open("scene.yaml")))
+    scene.from_config(yaml.safe_load(open("scene_combined.yaml")))
 
     # extract names from scene.yaml
     bg: rt.utility.BackgroundMonitor = scene._entities["Background Monitor"]
@@ -65,16 +65,17 @@ You will be asked to pick points from the object mesh and from the scene. This w
 
     print("Extracting scene...")
     scene_pcd_t = scene_integration.vbg.extract_point_cloud()
+    scene_pcd_t = scene_pcd_t.voxel_down_sample(0.002)
     scene_pcd = scene_pcd_t.to_legacy()
     
-    # alternative: using mesh
-    # scene_mesh_t = scene_integration.vbg.extract_triangle_mesh()
-    # print("Sampling points...")
-    # scene_pcd = scene_mesh_t.to_legacy().sample_points_poisson_disk(200_000)
-    # print("Copying to GPU...")
-    # scene_pcd_t = o3d.t.geometry.PointCloud.from_legacy(scene_pcd).cuda()
+    """ #alternative: using mesh
+    scene_mesh_t = scene_integration.vbg.cpu().extract_triangle_mesh()
+    print("Sampling points...")
+    scene_pcd = scene_mesh_t.to_legacy().sample_points_poisson_disk(200_000)
+    print("Copying to GPU...")
+    scene_pcd_t = o3d.t.geometry.PointCloud.from_legacy(scene_pcd).cuda() """
 
-    mesh_root_dir = Path("~/data/6IMPOSE/0_meshes/").expanduser().glob("*")
+    mesh_root_dir = Path("/home/aismart/Desktop/robotools/0_meshes/0_calib").expanduser().glob("*")
     objs = OrderedDict()
     for mesh_dir in mesh_root_dir:
         mesh_path = mesh_dir.joinpath(f"{mesh_dir.name}.obj")
@@ -243,7 +244,7 @@ def icp_refinement(
     MAX_ITERATIONS = 100
     FITNESS_THRESHOLD = 0.021
     INLIER_RMSE_THRESHOLD = 0.0065
-    MAX_CORRESPONDENCE_DISTANCE = 0.03
+    MAX_CORRESPONDENCE_DISTANCE = 0.015
 
     mu, sigma = 0, 0.1  # mean and standard deviation
     treg = o3d.t.pipelines.registration

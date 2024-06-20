@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 class SceneIntegration:
-    def __init__(self, use_color: bool = True, voxel_size=3 / 1024, block_resolution=16):
+    def __init__(self, use_color: bool = True, voxel_size=1.5 / 1024, block_resolution=16):
         self.device = o3c.Device("cuda:0")
         # self.device = o3c.Device("cpu:0")
 
