@@ -75,7 +75,7 @@ You will be asked to pick points from the object mesh and from the scene. This w
     print("Copying to GPU...")
     scene_pcd_t = o3d.t.geometry.PointCloud.from_legacy(scene_pcd).cuda() """
 
-    mesh_root_dir = Path("/home/aismart/Desktop/robotools/0_meshes/0_calib").expanduser().glob("*")
+    mesh_root_dir = Path("/home/aismart/Desktop/robotools/0_meshes").expanduser().glob("*")
     objs = OrderedDict()
     for mesh_dir in mesh_root_dir:
         mesh_path = mesh_dir.joinpath(f"{mesh_dir.name}.obj")

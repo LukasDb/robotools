@@ -86,7 +86,7 @@ async def async_main(capture: bool, output: Path) -> None:
     result = calibrator.calibrate(extrinsic_guess=extrinsic_guess)
     bg.set_pose(result.world2markers)
     cam.calibration = result.calibration
-    yaml.dump(scene.to_config(), open("scene.yaml", "w"))
+    yaml.dump(scene.to_config(), open("test.yaml", "w"))
 
     calibrator.visualize_calibration(
         world2markers=result.world2markers,

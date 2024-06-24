@@ -10,8 +10,8 @@ from pathlib import Path
 
 class SceneIntegration:
     def __init__(self, use_color: bool = True, voxel_size=1.5 / 1024, block_resolution=16):
-        self.device = o3c.Device("cuda:0")
-        # self.device = o3c.Device("cpu:0")
+        #self.device = o3c.Device("cuda:0")
+        self.device = o3c.Device("cpu:0")
 
         self.USE_COLOR = use_color
         self.voxel_size = voxel_size
@@ -113,4 +113,4 @@ class SceneIntegration:
 
     def load(self, path: Path = Path("vbg.npz")):
         self.vbg = self.vbg.load(str(path))
-        self.vbg = self.vbg.cuda()
+        #self.vbg = self.vbg.cuda()
