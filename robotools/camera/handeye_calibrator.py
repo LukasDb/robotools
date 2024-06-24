@@ -32,6 +32,7 @@ class DetectionDatapoint:
 class CalibrationResult:
     calibration: HandeyeCalibration
     world2markers: np.ndarray
+   
 
 
 class HandeyeCalibrator:
@@ -244,22 +245,6 @@ class HandeyeCalibrator:
         print("Extrinsic matrix:\n", extrinsic_matrix)
         world2markers = invert_homogeneous(get_affine_matrix_from_6d_vector("xyz", x[6:]))
 
-        # try OpenCV version
-        # R_gripper2base = [x[:3, :3] for x in robot_poses]
-        # t_gripper2base = [x[:3, 3] for x in robot_poses]
-        # R_target2cam = rvecs
-        # t_target2cam = tvecs
-        # R_cam2gripper, t_cam2gripper = cv2.calibrateHandEye(  # type: ignore
-        #     R_gripper2base,
-        #     t_gripper2base,
-        #     R_target2cam,
-        #     t_target2cam,
-        #     method=cv2.CALIB_HAND_EYE_TSAI,  # type: ignore
-        # )
-        # extrinsic_matrix = np.eye(4)
-        # extrinsic_matrix[:3, :3] = R_cam2gripper
-        # extrinsic_matrix[:3, 3] = np.reshape(t_cam2gripper, (3,))
-        # print("Extrinsic matrix:\n", extrinsic_matrix)
 
         return CalibrationResult(
             calibration=rt.camera.HandeyeCalibration(
@@ -278,6 +263,7 @@ class HandeyeCalibrator:
             gray
         )
         if corners is None:
+            print("No corners detected")
             return DetectionDatapoint(img=img.copy(), robot_pose=robot_pose.copy())
 
         cal_result = DetectionDatapoint(

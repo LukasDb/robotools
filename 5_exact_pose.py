@@ -4,6 +4,7 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 import cv2
 from cv2 import aruco
+import open3d as o3d
 
 import numpy as np
 import yaml
@@ -78,9 +79,10 @@ async def async_main(calibrate: bool,capture: bool, output: Path) -> None:
             #split cam pose into two vectors
             cam2marker_raw = invert_homogeneous(cam_pose_raw) @ bg._pose
           
+            
             rvec_guess, _ = cv2.Rodrigues(cam2marker_raw[:3, :3])   
-            tvec_guess = cv2.Mat.Mat(1,3)
-            tvec_guess =  cam2marker_raw[:4, 3]
+            tvec_guess = np.zeros((4, 1), dtype=np.float32)
+            tvec_guess =  cam2marker_raw[:3, 3]
 
 
             #estimatePoseCharucoBoard
@@ -90,8 +92,8 @@ async def async_main(calibrate: bool,capture: bool, output: Path) -> None:
                 board = calibrator.charuco_board,
                 cameraMatrix = cam_ZED.calibration.intrinsic_matrix,
                 distCoeffs = cam_ZED.calibration.dist_coeffs,
-                rvec = rvec_guess,
-                tvec = tvec_guess,
+                rvec = None,
+                tvec = None,
                 useExtrinsicGuess = False
             )
            
@@ -99,9 +101,10 @@ async def async_main(calibrate: bool,capture: bool, output: Path) -> None:
            
            
             #fuse estimated camera position
-            cam2marker = np.concatenate([tvec_out, rvec_out], axis=0)[:, 0].astype(
-                np.float64
-            )
+            rmat, _ = cv2.Rodrigues(rvec_out)
+            cam2marker = np.eye(4)
+            cam2marker[:3, :3] =rmat
+            cam2marker[:3, 3] = tvec_out.ravel()
             marker2cam = invert_homogeneous(cam2marker)
             # is this truely the right direction
             #multiply estimated camera postion and W2m
@@ -109,8 +112,20 @@ async def async_main(calibrate: bool,capture: bool, output: Path) -> None:
             #save estimated postion
            
             np.savetxt(str(output.joinpath(f"cam_refined{step:06}.txt")), cam_pose_refined)
+            display_camera_poses([cam_pose_raw, cam_pose_refined])
             calibrator.reset()            
 
+
+
+def display_camera_poses(transformations):
+    origin = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.5)
+    vis = [origin]
+    for pose in transformations:
+        frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
+        frame.transform(pose)
+        vis.append(frame)
+
+    o3d.visualization.draw_geometries(vis)
 
 
 
