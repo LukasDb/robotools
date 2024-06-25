@@ -25,8 +25,9 @@ async def async_main(capture: bool, output: Path) -> None:
     scene = rt.Scene()
 
     robot: FanucCRX10iAL = scene.add_entity(FanucCRX10iAL())
-    cam: Realsense = scene.add_entity(Realsense.get_available_devices()[0])
-    #cam: zed = scene.add_entity(zed.ZedCamera.get_available_devices()[0])
+    #
+    # cam: Realsense = scene.add_entity(Realsense.get_available_devices()[0])
+    cam: zed = scene.add_entity(zed.ZedCamera.get_available_devices()[0])
     bg = scene.add_entity(rt.utility.BackgroundMonitor())
 
     calibrator = HandeyeCalibrator()

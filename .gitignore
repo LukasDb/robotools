@@ -39,3 +39,5 @@ output/3a_scene_labelling.py
 labelled_objects.json
 labelled_objects.json
 labelled_objects.json
+evaluation_results.txt
+labelled_objects.json

@@ -19,7 +19,7 @@ class BaseEntity(ABC):
     @abstractmethod
     def from_config(self, config: dict) -> None:
         self.name = config["name"]
-        self.pose = np.array(config["pose"])
+        self._pose = np.array(config["pose"])
 
 
 class Entity(BaseEntity):

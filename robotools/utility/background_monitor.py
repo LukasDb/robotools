@@ -58,8 +58,8 @@ class BackgroundMonitor(rt.Entity):
         return out
 
     def from_config(self, config: dict) -> None:
-        pass
-
+        return super().from_config(config)
+    
     def _get_current_monitor(self) -> screeninfo.Monitor | DemoMonitor:
         if self._is_demo_mode:
             logging.warn("USING MOCK MONITOR DIMENSIONS")
