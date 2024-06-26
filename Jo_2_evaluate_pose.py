@@ -65,6 +65,23 @@ async def async_main(display: bool,capture: bool, output: Path) -> None:
         Rx_refined[step] = euler_refined[0]
         Ry_refined[step] = euler_refined[1]
         Rz_refined[step] = euler_refined[2]
+
+        # simple check to filter out datapoints at the -180 / +180 border
+        # includes hacky trick to get the differeces right anyways
+        if abs(Rx_refined[step] - Rx_raw[step]) > 50:
+            print(f"problem in {step}")
+            print(f"raw{Rx_raw[step]}")
+            print(f"refined{Rx_refined[step]}")
+            if Rx_refined[step] < 150:
+                Rx_refined[step] = Rx_refined[step] + 180
+                Rx_raw[step] = Rx_raw[step] - 180
+            else:
+                Rx_refined[step] = Rx_refined[step] - 180
+                Rx_raw[step] = Rx_raw[step] + 180
+            print(f"raw{Rx_raw[step]}")
+            print(f"refined{Rx_refined[step]}")
+
+
         
 
 
@@ -101,7 +118,7 @@ async def async_main(display: bool,capture: bool, output: Path) -> None:
 
 
 def analysis(array_raw, array_refined):
-    bias = np.mean(array_raw) - np.mean(array_refined)
+    bias = np.mean(array_raw -array_refined)
     std_dev = np.std(array_raw - array_refined)
     max_diff = np.max(np.abs(array_raw - array_refined))
     
