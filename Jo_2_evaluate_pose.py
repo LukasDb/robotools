@@ -23,11 +23,20 @@ from robotools.geometry import (
     get_affine_matrix_from_6d_vector,
 )
 
-async def async_main(display: bool,capture: bool, output: Path) -> None:
+async def async_main(save: bool,display: bool,capture: bool, output: Path) -> None:
+    scene = rt.Scene()
+    scene.from_config(yaml.safe_load(open("scene_combined.yaml"))) # make sure to have the right calibration file
+    #cam: rt.camera.Camera = scene._entities["ZED-M"]
+    cam: rt.camera.Camera = scene._entities["Realsense_121622061798"]
+    bg: rt.utility.BackgroundMonitor = scene._entities["Background Monitor"]
+    
+   
+    
     #load arrays
     w2c_array_raw = np.load(str(output.joinpath("world2cam_array_raw.npy")))
     w2c_array_refined = np.load(str(output.joinpath("world2cam_array_refined.npy")))
-
+    image_array = np.load(str(output.joinpath("frames.npy")))
+    w2m = bg.get_pose()
     #variables
     output_lines =["All distance parameters are given in meters, all rotation parameters in degrees.\nAlways raw - refined \n"]
 
@@ -47,7 +56,6 @@ async def async_main(display: bool,capture: bool, output: Path) -> None:
     
     length = len(x_raw)
     Rx_diff = np.zeros(length)
-
     Ry_diff = np.zeros(length)
 
     Rz_diff= np.zeros(length)
@@ -104,6 +112,57 @@ async def async_main(display: bool,capture: bool, output: Path) -> None:
     #save to file
     with open(str(output.joinpath("evaluation_results.txt")), 'w') as file:
         file.write("\n".join(output_lines))
+    
+    
+    # visualization
+    if display:
+        
+        for step in range(length):
+        
+
+            img = image_array[step]
+            # compute vectors
+            c2m_raw = invert_homogeneous(w2c_array_raw[step,:,:]) @ w2m
+            rvec_raw, _ = cv2.Rodrigues(c2m_raw[:3,:3])
+            tvec_raw = c2m_raw[:3,3]
+
+            c2m_refined = invert_homogeneous(w2c_array_refined[step,:,:]) @ w2m
+            rvec_refined, _ = cv2.Rodrigues(c2m_refined[:3,:3])
+            tvec_refined = c2m_refined[:3,3]
+        
+            # duplicate image
+            raw = img.copy()
+            refined = img.copy()
+            # label
+            
+            cv2.putText(raw, "Raw", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)  # type: ignore
+            cv2.putText(refined, "Refined", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)  # type: ignore
+            # draw corner with cam2marker_raw
+            raw = cv2.drawFrameAxes(
+                image= raw,
+                cameraMatrix= cam.calibration.intrinsic_matrix, 
+                distCoeffs= cam.calibration.dist_coeffs, 
+                rvec= rvec_raw, 
+                tvec= tvec_raw, 
+                length = 0.1,
+                thickness = 3
+            )
+            # draw corner with cam2marker_refined
+            refined = cv2.drawFrameAxes(
+                image= refined,
+                cameraMatrix= cam.calibration.intrinsic_matrix, 
+                distCoeffs= cam.calibration.dist_coeffs, 
+                rvec= rvec_refined, 
+                tvec= tvec_refined, 
+                length = 0.1,
+                thickness = 3
+            )
+            annotated = np.hstack([raw, refined])
+
+            cv2.imshow(f"Calibration {step}, the differences in Angles are: Rx: {Rx_diff[step]}, Ry: {Ry_diff[step]}, Rz: {Rz_diff[step]} ", annotated[::2, ::2, ::-1])
+            key = cv2.waitKey(0)
+            if save:
+                cv2.imwrite(str(output.joinpath(f"Cal of pic{step:03}.png")), annotated)
     print("Done")
 
 
@@ -122,6 +181,7 @@ def print_output(param, bias, std_dev, max_diff,output_lines):
     output_lines.append(text_out)
 
 
+
     
 
 
@@ -133,9 +193,10 @@ def print_output(param, bias, std_dev, max_diff,output_lines):
 @click.command()
 @click.option("--capture", is_flag=True)
 @click.option("--display", is_flag=True)
+@click.option("--save", is_flag=True)
 @click.option("--output", type=click.Path(path_type=Path), default="data/recalibration")
-def main(display: bool,capture: bool, output: Path):
-    asyncio.run(async_main (display, capture, output))
+def main(save: bool, display: bool,capture: bool, output: Path):
+    asyncio.run(async_main (save, display, capture, output))
 
 
 if __name__ == "__main__":

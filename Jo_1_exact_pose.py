@@ -12,6 +12,7 @@ from scipy.spatial.transform import Rotation as R
 from pathlib import Path
 import click
 import asyncio
+import time
 
 import robotools as rt
 from robotools.camera import Realsense, HandeyeCalibrator, zed, live_recal
@@ -31,7 +32,8 @@ async def async_main(display: bool,capture: bool,save:bool, output: Path) -> Non
     scene.from_config(yaml.safe_load(open("scene_combined.yaml"))) # make sure to have the right calibration file
 
     # extract names from scene_combined.yaml
-    cam: rt.camera.Camera = scene._entities["ZED-M"]
+    #cam: rt.camera.Camera = scene._entities["ZED-M"]
+    cam: rt.camera.Camera = scene._entities["Realsense_121622061798"]
     bg: rt.utility.BackgroundMonitor = scene._entities["Background Monitor"]
     robot: rt.robot.Robot = scene._entities["crx"]
     
@@ -42,6 +44,7 @@ async def async_main(display: bool,capture: bool,save:bool, output: Path) -> Non
     #initalize arrays
     w2c_array_raw = []
     w2c_array_refined = []
+    image_array = []
     #get the staic matrices
     world2marker = bg.get_pose()
     robot2cam = cam.calibration.extrinsic_matrix
@@ -55,17 +58,11 @@ async def async_main(display: bool,capture: bool,save:bool, output: Path) -> Non
         center_point=(0.83, 0, -0.16),
         view_jitter=(5, 5, 5),
     )
-    trajectory += SphericalTrajectory(
-        thetas=np.linspace(200,330 , 6, endpoint=False).tolist(),
-        pitchs=[40, 55, 65, 75],
-        radius=[0.3],
-        center_point=(0.83, 0, -0.16),
-        view_jitter=(5, 5, 5),
-    )
+    
     trajectory += CartesianTrajectory(
             (180, 0, 90),
             np.linspace(0.83 - 0.1, 0.83 + 0.1, 3).tolist(), 
-            np.linspace(-0.3, 0.3, 3).tolist(),
+            np.linspace(-0.25, 0.25, 3).tolist(),
             0.5,
             view_jitter=(5, 5, 5),
         )
@@ -91,6 +88,7 @@ async def async_main(display: bool,capture: bool,save:bool, output: Path) -> Non
     #drive the robot along the trajectory, take a picture at each positon, save both the robot and the position
     output.mkdir(parents=True, exist_ok=True)
     async for step in executor.execute(robot, trajectory, cam=cam):
+        time.sleep(2)
         frame = cam.get_frame()
         cv2.imshow("Preview", frame.rgb[::2, ::2, ::-1])
         cv2.waitKey(1)
@@ -111,14 +109,15 @@ async def async_main(display: bool,capture: bool,save:bool, output: Path) -> Non
             #append both raw and refined camera poses to arrays
             w2c_array_refined.append(world2cam_refined)
             w2c_array_raw.append(world2cam_raw)
-            if save:
-                cv2.imwrite(str(output.joinpath(f"{step:06}.png")), frame.rgb)
+            image_array.append(frame.rgb)
         calibrator.reset()
         print(step)
     
     #save agglomerated arrays for later usage
     np.save(str(output.joinpath("world2cam_array_raw.npy")),w2c_array_raw)
     np.save(str(output.joinpath("world2cam_array_refined.npy")),w2c_array_refined)
+    np.save(str(output.joinpath("frames.npy")),image_array)
+    print("Done")
     
 
 
