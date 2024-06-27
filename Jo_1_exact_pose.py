@@ -14,7 +14,7 @@ import click
 import asyncio
 
 import robotools as rt
-from robotools.camera import Realsense, HandeyeCalibrator, zed
+from robotools.camera import Realsense, HandeyeCalibrator, zed, live_recal
 from robotools.trajectory import SphericalTrajectory, TrajectoryExecutor, CartesianTrajectory
 from robotools.robot import FanucCRX10iAL
 from robotools.geometry import (
@@ -26,7 +26,7 @@ from robotools.geometry import (
 import coloredlogs
 import logging
 
-async def async_main(display: bool,capture: bool, output: Path) -> None:
+async def async_main(display: bool,capture: bool,save:bool, output: Path) -> None:
     scene = rt.Scene()
     scene.from_config(yaml.safe_load(open("scene_combined.yaml"))) # make sure to have the right calibration file
 
@@ -53,21 +53,21 @@ async def async_main(display: bool,capture: bool, output: Path) -> None:
         pitchs=[40, 55, 65, 75],
         radius=[0.3],
         center_point=(0.83, 0, -0.16),
-        view_jitter=(5, 5, 15),
+        view_jitter=(5, 5, 5),
     )
     trajectory += SphericalTrajectory(
         thetas=np.linspace(200,330 , 6, endpoint=False).tolist(),
         pitchs=[40, 55, 65, 75],
         radius=[0.3],
         center_point=(0.83, 0, -0.16),
-        view_jitter=(5, 5, 15),
+        view_jitter=(5, 5, 5),
     )
     trajectory += CartesianTrajectory(
             (180, 0, 90),
             np.linspace(0.83 - 0.1, 0.83 + 0.1, 3).tolist(), 
             np.linspace(-0.3, 0.3, 3).tolist(),
             0.5,
-            view_jitter=(5, 5, 15),
+            view_jitter=(5, 5, 5),
         )
     trajectory.transform(extrinsic_guess, local=True)
     if display:
@@ -100,53 +100,19 @@ async def async_main(display: bool,capture: bool, output: Path) -> None:
             #cv2.imwrite(str(output.joinpath(f"{step:06}.png")), frame.rgb)     
             #np.savetxt(str(output.joinpath(f"cam_raw{step:06}.txt")), world2cam_raw)
         #readimage
+        retval, world2cam_refined = live_recal.charucoPnP(calibrator, cam, frame, world2cam_raw, world2marker)
+        if retval:
 
-        vis = calibrator.capture(frame.rgb, world2cam_raw)
-
-        #find charucomarkes
-        detection_result = calibrator._detect_charuco(frame.rgb, world2cam_raw)
-        assert detection_result.detected , "No Corners detected"
-        #split cam pose into two vectors
-       
-        
-        #possible usage of intial guesses, doesnt work
-        #rvec_guess, _ = cv2.Rodrigues(cam2marker_raw[:3, :3])   
-        #tvec_guess =  cam2marker_raw[:3, 3]
-
-
-        #estimatePoseCharucoBoard
-        if detection_result.detected:
-
-            retval, rvec_out, tvec_out = cv2.aruco.estimatePoseCharucoBoard(
-                charucoCorners = detection_result.corners,
-                charucoIds = detection_result.ids,
-                board = calibrator.charuco_board,
-                cameraMatrix = cam.calibration.intrinsic_matrix,
-                distCoeffs = cam.calibration.dist_coeffs,
-                rvec = None,
-                tvec = None,
-                useExtrinsicGuess = False
-            )
-            
-            assert retval, "Position estimation failed"
-            
-            
-            #fuse estimated camera position
-            rmat, _ = cv2.Rodrigues(rvec_out)
-            cam2marker = np.eye(4)
-            cam2marker[:3, :3] =rmat
-            cam2marker[:3, 3] = tvec_out.ravel()
-            marker2cam = invert_homogeneous(cam2marker)
-        
-            #multiply estimated camera postion and W2m
-            world2cam_refined =  world2marker @ marker2cam
             #save estimated postion
             #np.savetxt(str(output.joinpath(f"cam_refined{step:06}.txt")), world2cam_refined)
             if display:
                 display_camera_poses([world2marker, world2cam_raw,world2cam_refined],trajectory)
+                
             #append both raw and refined camera poses to arrays
             w2c_array_refined.append(world2cam_refined)
             w2c_array_raw.append(world2cam_raw)
+            if save:
+                cv2.imwrite(str(output.joinpath(f"{step:06}.png")), frame.rgb)
         calibrator.reset()
         print(step)
     
@@ -183,9 +149,10 @@ def display_camera_poses(transformations,trajectory):
 @click.command()
 @click.option("--capture", is_flag=True)
 @click.option("--display", is_flag=True)
+@click.option("--save", is_flag=True)
 @click.option("--output", type=click.Path(path_type=Path), default="data/recalibration")
-def main(display: bool,capture: bool, output: Path):
-    asyncio.run(async_main (display, capture, output))
+def main(display: bool,capture: bool,save: bool, output: Path):
+    asyncio.run(async_main (display, capture,save, output))
 
 
 if __name__ == "__main__":

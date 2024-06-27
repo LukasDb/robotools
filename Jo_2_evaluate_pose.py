@@ -29,10 +29,10 @@ async def async_main(display: bool,capture: bool, output: Path) -> None:
     w2c_array_refined = np.load(str(output.joinpath("world2cam_array_refined.npy")))
 
     #variables
-    output_lines =["All distance parameters are given in meters, all rotation parameters in degrees.\n"]
+    output_lines =["All distance parameters are given in meters, all rotation parameters in degrees.\nAlways raw - refined \n"]
 
     #extract coordinates
-    x_raw = w2c_array_raw[:, 0, 3]
+    x_raw = w2c_array_raw[:, 0, 3] 
     x_refined =w2c_array_refined[:, 0, 3]
 
     y_raw = w2c_array_raw[:, 1 ,3]
@@ -46,40 +46,25 @@ async def async_main(display: bool,capture: bool, output: Path) -> None:
 
     
     length = len(x_raw)
-    Rx_raw = np.zeros(length)
-    Rx_refined = np.zeros(length)
+    Rx_diff = np.zeros(length)
 
-    Ry_raw = np.zeros(length)
-    Ry_refined = np.zeros(length)
+    Ry_diff = np.zeros(length)
 
-    Rz_raw = np.zeros(length)
-    Rz_refined = np.zeros(length)
+    Rz_diff= np.zeros(length)
 
     for step in range(length):
-        euler_raw, _ = rt.geometry.get_euler_from_affine_matrix(w2c_array_raw[step])
-        Rx_raw[step] = euler_raw[0]
-        Ry_raw[step] = euler_raw[1]
-        Rz_raw[step] = euler_raw[2]
-
-        euler_refined, _ = rt.geometry.get_euler_from_affine_matrix(w2c_array_refined[step])
-        Rx_refined[step] = euler_refined[0]
-        Ry_refined[step] = euler_refined[1]
-        Rz_refined[step] = euler_refined[2]
-
-        # simple check to filter out datapoints at the -180 / +180 border
-        # includes hacky trick to get the differeces right anyways
-        if abs(Rx_refined[step] - Rx_raw[step]) > 50:
-            print(f"problem in {step}")
-            print(f"raw{Rx_raw[step]}")
-            print(f"refined{Rx_refined[step]}")
-            if Rx_refined[step] < 150:
-                Rx_refined[step] = Rx_refined[step] + 180
-                Rx_raw[step] = Rx_raw[step] - 180
-            else:
-                Rx_refined[step] = Rx_refined[step] - 180
-                Rx_raw[step] = Rx_raw[step] + 180
-            print(f"raw{Rx_raw[step]}")
-            print(f"refined{Rx_refined[step]}")
+        affine_combined = w2c_array_raw[step] @ invert_homogeneous(w2c_array_refined[step])
+        euler_combined, _ = rt.geometry.get_euler_from_affine_matrix(affine_combined)
+        Rx_diff[step] = euler_combined[0]
+        Ry_diff[step] = euler_combined[1]
+        Rz_diff[step] = euler_combined[2]
+        
+        text_out = step
+        print(text_out)
+        output_lines.append(f"{text_out}")
+        text_out = euler_combined
+        print(text_out)
+        output_lines.append(f"{text_out}")
 
 
         
@@ -92,9 +77,17 @@ async def async_main(display: bool,capture: bool, output: Path) -> None:
 
     bias_d_eucl, std_dev_d_eucl, max_diff_d_eucl = analysis(d_eucl_raw,d_eucl_refined)
 
-    bias_Rx, std_dev_Rx, max_diff_Rx = analysis(Rx_raw,Rx_refined)
-    bias_Ry, std_dev_Ry, max_diff_Ry = analysis(Ry_raw,Ry_refined)
-    bias_Rz, std_dev_Rz, max_diff_Rz = analysis(Rz_raw,Rz_refined)
+    bias_Rx = np.mean(Rx_diff)
+    std_dev_Rx = np.std(Rx_diff)
+    max_diff_Rx = np.max(np.abs(Rx_diff))
+    
+    bias_Ry = np.mean(Ry_diff)
+    std_dev_Ry = np.std(Ry_diff)
+    max_diff_Ry = np.max(np.abs(Ry_diff))
+    
+    bias_Rz = np.mean(Rz_diff)
+    std_dev_Rz = np.std(Rz_diff)
+    max_diff_Rz = np.max(np.abs(Rz_diff))
 
     text_out = f"We evaluated {length} Images. \n \n \n"
     print(text_out)
