@@ -37,7 +37,7 @@ async def async_main(capture: bool, output: Path) -> None:
     calibrator = HandeyeCalibrator()
     world2marker = bg.get_pose()
 
-    output_buffer = output
+    
 
     trajectory = SphericalTrajectory(
         thetas=np.linspace(45, 315, 8, endpoint=True).tolist(),
@@ -179,7 +179,7 @@ async def async_main(capture: bool, output: Path) -> None:
             async for step in executor.execute(robot, trajectory, cam=cam_ZED):
                 #recallibrate
                 world2robot = await robot.get_pose()
-                world2cam_raw = world2robot @ cam_RS.calibration.extrinsic_matrix
+                world2cam_raw = world2robot @ cam_ZED.calibration.extrinsic_matrix
                 bg.set_to_charuco()
                 time.sleep(1)
                 frame = cam_ZED.get_frame()
@@ -211,7 +211,6 @@ async def async_main(capture: bool, output: Path) -> None:
                     else:
                         print("the offset between the two position values was too big")
         
-        output = output_buffer 
         output.mkdir(parents=True, exist_ok=True)
         writer_params = sp.writers.WriterConfig(
             output_dir=output,
@@ -228,7 +227,7 @@ async def async_main(capture: bool, output: Path) -> None:
     # output = Path("~/data/real/single_cpsduck_realsense_121622061798").expanduser()
 
     tfds = sp.data.TFRecordDataset
-    output = output_buffer 
+    output = output 
     print(output)
     dataset= tfds.get(
         output,
@@ -268,7 +267,7 @@ async def async_main(capture: bool, output: Path) -> None:
             )
         
               
-        scene_integration.save(output_buffer.parent.joinpath("vbg.npz"))
+        scene_integration.save(output.parent.joinpath("vbg.npz"))
     else:
         scene_integration.load()
 
