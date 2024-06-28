@@ -27,6 +27,8 @@ from robotools.geometry import (
 import coloredlogs
 import logging
 
+import threading
+
 async def async_main(display: bool,capture: bool,save:bool, output: Path) -> None:
     scene = rt.Scene()
     scene.from_config(yaml.safe_load(open("scene_combined.yaml"))) # make sure to have the right calibration file
@@ -38,9 +40,7 @@ async def async_main(display: bool,capture: bool,save:bool, output: Path) -> Non
     robot: rt.robot.Robot = scene._entities["crx"]
     
     calibrator = HandeyeCalibrator()
-    extrinsic_guess = np.eye(4)
-    extrinsic_guess[:3, :3] = R.from_euler("zx", [-90, -5], degrees=True).as_matrix()
-
+   
     #initalize arrays
     w2c_array_raw = []
     w2c_array_refined = []
@@ -66,7 +66,6 @@ async def async_main(display: bool,capture: bool,save:bool, output: Path) -> Non
             0.5,
             view_jitter=(5, 5, 5),
         )
-    trajectory.transform(extrinsic_guess, local=True)
     if display:
         trajectory.visualize()
 
@@ -84,13 +83,21 @@ async def async_main(display: bool,capture: bool,save:bool, output: Path) -> Non
         n_markers=calibrator.n_markers,
         charuco_dict=calibrator.aruco_dict,
         )
-    
+    # have a thread running to combat Realsense timing issues
+    stop_thread = threading.Event()
+    if cam.name == "Realsense_121622061798":
+        stop_thread.clear()
+        thread = threading.Thread(target=worker,args=(cam, stop_thread))
+        thread.start()
+
+
     #drive the robot along the trajectory, take a picture at each positon, save both the robot and the position
     output.mkdir(parents=True, exist_ok=True)
     async for step in executor.execute(robot, trajectory, cam=cam):
         time.sleep(2)
         frame = cam.get_frame()
-        cv2.imshow("Preview", frame.rgb[::2, ::2, ::-1])
+        img = frame.rgb
+        cv2.imshow("Preview", img[::2, ::2, ::-1])
         cv2.waitKey(1)
         world2robot = await robot.get_pose()
         world2cam_raw = world2robot @ robot2cam
@@ -98,7 +105,7 @@ async def async_main(display: bool,capture: bool,save:bool, output: Path) -> Non
             #cv2.imwrite(str(output.joinpath(f"{step:06}.png")), frame.rgb)     
             #np.savetxt(str(output.joinpath(f"cam_raw{step:06}.txt")), world2cam_raw)
         #readimage
-        retval, world2cam_refined = live_recal.charucoPnP(calibrator, cam, frame, world2cam_raw, world2marker)
+        retval, world2cam_refined = live_recal.charucoPnP(calibrator, cam, img, world2cam_raw, world2marker)
         if retval:
 
             #save estimated postion
@@ -109,14 +116,16 @@ async def async_main(display: bool,capture: bool,save:bool, output: Path) -> Non
             #append both raw and refined camera poses to arrays
             w2c_array_refined.append(world2cam_refined)
             w2c_array_raw.append(world2cam_raw)
-            image_array.append(frame.rgb)
-        calibrator.reset()
+            image_array.append(img)
+            cv2.imwrite(str(output.joinpath(f"Cal of pic{step:03}.png")), img)
+        
         print(step)
     
     #save agglomerated arrays for later usage
     np.save(str(output.joinpath("world2cam_array_raw.npy")),w2c_array_raw)
     np.save(str(output.joinpath("world2cam_array_refined.npy")),w2c_array_refined)
     np.save(str(output.joinpath("frames.npy")),image_array)
+    stop_thread.set()
     print("Done")
     
 
@@ -130,6 +139,7 @@ def display_camera_poses(transformations,trajectory):
         frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size= 0.1)
         frame.transform(pose)
         vis.append(frame)
+        
         i += 1
     for pose in trajectory:
         frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.03)
@@ -137,6 +147,13 @@ def display_camera_poses(transformations,trajectory):
         vis.append(frame)
 
     o3d.visualization.draw_geometries(vis)
+
+def worker(cam,stop_signal):
+    print("Started fetching thread")
+    while not stop_signal.is_set():
+        buffer = cam.get_frame()
+        buffer = None
+
 
 
 

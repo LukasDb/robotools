@@ -4,7 +4,6 @@ import numpy as np
 from enum import Enum, auto
 import numpy.typing as npt
 
-import robotools as rt
 from ..entity import AsyncEntity
 
 

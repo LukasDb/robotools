@@ -7,7 +7,6 @@ import pyrealsense2 as rs
 import logging
 import threading
 
-import robotools as rt
 
 # mappings
 occ_speed_map = {

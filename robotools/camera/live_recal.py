@@ -11,12 +11,15 @@ from robotools.geometry import (
 
 
 
-def charucoPnP(calibrator,cam, frame,world2cam_raw, world2marker):
-    vis = calibrator.capture(frame.rgb, world2cam_raw)
+def charucoPnP(calibrator,cam, img,world2cam_raw, world2marker):
+    calibrator.reset()
+    vis = calibrator.capture(img, world2cam_raw)
 
     #find charucomarkes
-    detection_result = calibrator._detect_charuco(frame.rgb, world2cam_raw)
-    assert detection_result.detected , "No Corners detected"
+    detection_result = calibrator._detect_charuco(img, world2cam_raw)
+    if detection_result.detected == False:
+        return False, None
+   
     #split cam pose into two vectors
     
     
@@ -38,24 +41,20 @@ def charucoPnP(calibrator,cam, frame,world2cam_raw, world2marker):
             tvec = None,
             useExtrinsicGuess = False
         )
+        if retval:
+            #fuse estimated camera position
+            rmat, _ = cv2.Rodrigues(rvec_out)
+            cam2marker = np.eye(4)
+            cam2marker[:3, :3] =rmat
+            cam2marker[:3, 3] = tvec_out.ravel()
+            marker2cam = invert_homogeneous(cam2marker)
         
-        assert retval, "Position estimation failed"
-        
-        
-        #fuse estimated camera position
-        rmat, _ = cv2.Rodrigues(rvec_out)
-        cam2marker = np.eye(4)
-        cam2marker[:3, :3] =rmat
-        cam2marker[:3, 3] = tvec_out.ravel()
-        marker2cam = invert_homogeneous(cam2marker)
-    
-        #multiply estimated camera postion and W2m
-        world2cam_refined =  world2marker @ marker2cam
-        retval = True 
-        return retval, world2cam_refined
+            #multiply estimated camera postion and W2m
+            world2cam_refined =  world2marker @ marker2cam
+            retval = True 
+            return retval, world2cam_refined
+        else:
+            print("Pose estimation failed")
     retval = False
     world2cam_refined = None
     return retval, world2cam_refined
-    
-
-
