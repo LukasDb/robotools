@@ -40,14 +40,14 @@ async def async_main(capture: bool, output: Path) -> None:
         thetas=np.linspace(45, 315, 8, endpoint=True).tolist(),
         pitchs=[45, 70],
         radius=[0.35],
-        center_point=(0.83, 0, -0.16),
+        center_point=(0.83, 0, -0.05),
         #view_jitter=(5, 5, 5),
     )
     trajectory += SphericalTrajectory(
         thetas=np.linspace(60, 300, 8, endpoint=True).tolist(),
         pitchs=[60],
         radius=[0.45],
-        center_point=(0.83, 0, -0.16),
+        center_point=(0.83, 0, -0.05),
         #view_jitter=(5, 5, 5),
     )
     trajectory += CartesianTrajectory(
@@ -215,7 +215,7 @@ async def async_main(capture: bool, output: Path) -> None:
             tfds.DEPTH,
         ],
     ).enumerate()
-    """ output = output_buffer / "RSP"
+    output = output_buffer / "RSP"
     dataset_2 = tfds.get(
         output,
         get_keys=[
@@ -240,8 +240,9 @@ async def async_main(capture: bool, output: Path) -> None:
             tfds.RGB,
             tfds.DEPTH,
         ],
-    ).enumerate() """
-    """ output = output_buffer / "ZEDnP"
+    ).enumerate() 
+    """
+    output = output_buffer / "ZEDnP"
     dataset_4 = tfds.get(
         output,
         get_keys=[
@@ -277,7 +278,7 @@ async def async_main(capture: bool, output: Path) -> None:
                 data[tfds.CAM_MATRIX].numpy(),
                 extrinsic,
             )
-        f""" or i, data in tqdm(dataset_2, total=len(trajectory), desc="Reconstructing..."):
+        for i, data in tqdm(dataset_2, total=len(trajectory), desc="Reconstructing..."):
             t = data[tfds.CAM_LOCATION]
             r = R.from_quat(data[tfds.CAM_ROTATION].numpy())  # xyzw quaternion
             extrinsic = np.eye(4)
@@ -302,7 +303,7 @@ async def async_main(capture: bool, output: Path) -> None:
                 data[tfds.DEPTH].numpy(),
                 data[tfds.CAM_MATRIX].numpy(),
                 extrinsic, 
-            )"""
+            )
         """ for i, data in tqdm(dataset_4, total=len(trajectory), desc="Reconstructing..."):
             t = data[tfds.CAM_LOCATION]
             r = R.from_quat(data[tfds.CAM_ROTATION].numpy())  # xyzw quaternion

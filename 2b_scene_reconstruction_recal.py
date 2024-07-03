@@ -101,10 +101,6 @@ async def async_main(capture: bool, output: Path) -> None:
             world2robot = await robot.get_pose()
             world2cam_raw = world2robot @ cam_RS.calibration.extrinsic_matrix
             bg.set_to_charuco(
-                chessboard_size=calibrator.chessboard_size,
-                marker_size=calibrator.marker_size,
-                n_markers=calibrator.n_markers,
-                charuco_dict=calibrator.aruco_dict,
             )
             time.sleep(2)
             frame = cam_RS.get_frame()
@@ -307,7 +303,7 @@ async def async_main(capture: bool, output: Path) -> None:
     scene_integration = rt.SceneIntegration(use_color=True)
     
     if True: 
-        
+
 
         files = os.listdir(output.joinpath("data"))
         tfrecord_file = None
@@ -355,7 +351,7 @@ async def async_main(capture: bool, output: Path) -> None:
     fig, axs = plt.subplots(n_prev, 3)
     mean_diffs = []
     outlier_ratios = []
-    for step, data in tqdm(dataset, total=len(captured_data), desc="Analyzing..."):
+    for step, data in tqdm(dataset, total=total, desc="Analyzing..."):
         extrinsics = np.eye(4)
         extrinsics[:3, 3] = data[tfds.CAM_LOCATION].numpy()
         extrinsics[:3, :3] = R.from_quat(data[tfds.CAM_ROTATION].numpy()).as_matrix()

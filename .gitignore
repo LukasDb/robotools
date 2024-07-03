@@ -41,3 +41,6 @@ labelled_objects.json
 labelled_objects.json
 evaluation_results.txt
 labelled_objects.json
+
+robot_pose_data.npy
+scene_combined.yaml

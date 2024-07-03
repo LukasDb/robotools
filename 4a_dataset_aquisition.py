@@ -16,6 +16,8 @@ import asyncio
 import matplotlib.pyplot as plt
 import open3d as o3d
 import time
+import re
+import os
 
 
 import simpose as sp
@@ -51,6 +53,7 @@ async def async_main(capture: bool,label:bool, output: Path) -> None:
     cam: rt.camera.Camera = scene._entities["ZED-M"]
 
     bg: rt.utility.BackgroundMonitor = scene._entities["Background Monitor"]
+    projector: rt.utility.BackgroundMonitor = scene._entities["Projector"]
     robot: rt.robot.Robot = scene._entities["crx"]
 
     scene_integration = rt.SceneIntegration(use_color=True)
@@ -64,29 +67,33 @@ async def async_main(capture: bool,label:bool, output: Path) -> None:
         thetas=np.linspace(30,160 , 6, endpoint=False).tolist(),
         pitchs=[40, 55, 65, 75],
         radius=[0.3],
-        center_point=(0.83, 0, -0.16),
-        view_jitter=(5, 5, 120),
+        center_point=(0.83, 0, -0.05),
+        view_jitter=(5, 5, 5),
     )
     trajectory += SphericalTrajectory(
         thetas=np.linspace(200,330 , 6, endpoint=False).tolist(),
         pitchs=[40, 55, 65, 75],
         radius=[0.3],
-        center_point=(0.83, 0, -0.16),
-        view_jitter=(5, 5, 120),
+        center_point=(0.83, 0, -0.05),
+        view_jitter=(5, 5, 5),
     )
     trajectory += CartesianTrajectory(
             (180, 0, 90),
             np.linspace(0.83 - 0.1, 0.83 + 0.1, 3).tolist(), 
             np.linspace(-0.3, 0.3, 3).tolist(),
             0.5,
-            view_jitter=(5, 5, 120),
-        )
+            view_jitter=(5, 5, 5),
+        ) 
 
     if capture:
         executor = TrajectoryExecutor()
         trajectory.visualize()
         input("Please move the window to the background screen and press enter")
         bg.setup_window()
+        input("Please move the window to the projector screen and press enter")
+        projector.setup_window()
+        projector.set_to_black()
+
 
         # input("Please move the window to the second screen and press enter")
         # bg.setup_window()
@@ -94,70 +101,71 @@ async def async_main(capture: bool,label:bool, output: Path) -> None:
 
         # 2) acquire
         captured_data = []
-        with sp.writers.TFRecordWriter(writer_params, None) as writer:
+        
            
-            async for step in executor.execute(robot, trajectory, cam=cam):
-                #recallibrate
-                world2robot = await robot.get_pose()
-                world2cam_raw = world2robot @ cam.calibration.extrinsic_matrix
-                bg.set_to_charuco(
-                chessboard_size=calibrator.chessboard_size,
-                marker_size=calibrator.marker_size,
-                n_markers=calibrator.n_markers,
-                charuco_dict=calibrator.aruco_dict,
-                )
-                time.sleep(1)
-                frame = cam.get_frame()
-                img = frame.rgb
-                retval, world2cam_refined = live_recal.charucoPnP(calibrator, cam, img, world2cam_raw, world2marker)
-                if retval:
-                    diff = world2cam_raw @ invert_homogeneous(world2cam_refined)
-                    #there could be an error because of this. In case that happens,we need
-                    if np.max(np.abs(diff)) < 2:
-                        bg.set_to_black()
-                        time.sleep(1)
+        async for step in executor.execute(robot, trajectory, cam=cam):
+            #recallibrate
+            world2robot = await robot.get_pose()
+            world2cam_raw = world2robot @ cam.calibration.extrinsic_matrix
+            bg.set_to_charuco(
+            chessboard_size=calibrator.chessboard_size,
+            marker_size=calibrator.marker_size,
+            n_markers=calibrator.n_markers,
+            charuco_dict=calibrator.aruco_dict,
+            )
+            time.sleep(2)
+            frame = cam.get_frame()
+            img = frame.rgb
+            retval, world2cam_refined = live_recal.charucoPnP(calibrator, cam, img, world2cam_raw, world2marker)
+            if retval:
+                diff = world2cam_raw @ invert_homogeneous(world2cam_refined)
+                #there could be an error because of this. In case that happens,we need
+                if np.max(np.abs(diff)) < 2:
+                    bg.set_to_black()
+                    time.sleep(2)
 
-                        cam_rot = R.from_matrix(world2cam_refined[:3, :3]).as_quat()
-                        cam_pos = world2cam_refined[:3, 3]
+                    cam_rot = R.from_matrix(world2cam_refined[:3, :3]).as_quat()
+                    cam_pos = world2cam_refined[:3, 3]
 
-                        #get frame
-                        
-                        frame = cam.get_frame()             
-                        rgb=frame.rgb
-                        rgb = rgb.copy()
-                        rgb_R=frame.rgb_R
-                        rgb_R = rgb_R.copy
-                        depth = frame.depth
-                        depth = depth.copy()
-                        depth_R = frame.depth_R
-                        depth_R = depth_R.copy()
+                    #get frame
+                    
+                    frame = cam.get_frame()             
+                    """ rgb=frame.rgb
+                    rgb = rgb.copy()
+                    rgb_R=frame.rgb_R
+                    rgb_R = rgb_R.copy
+                    depth = frame.depth
+                    depth = depth.copy()
+                    depth_R = frame.depth_R
+                    depth_R = depth_R.copy()
+                    """
 
 
-
-                        rp = sp.RenderProduct(
-                            rgb=rgb,
-                            rgb_R= rgb_R,
-                            depth=depth,
-                            depth_R=depth_R,
-                            intrinsics=cam_RS.calibration.intrinsic_matrix,
-                            cam_position=cam_pos,
-                            cam_quat_xyzw=cam_rot,
-                        )  
-                        captured_data.append(rp)
-                    else:
-                        print("the offset between the two position values was too big")
+                    rp = sp.RenderProduct(
+                        rgb=frame.rgb,
+                        rgb_R= frame.rgb_R,
+                        depth=frame.depth,
+                        depth_R=frame.depth_R,
+                        intrinsics=cam.calibration.intrinsic_matrix,
+                        cam_position=cam_pos,
+                        cam_quat_xyzw=cam_rot,
+                    )  
+                    captured_data.append(rp)
+                else:
+                    print("the offset between the two position values was too big")
         output_raw = Path("data/labelled_raw")
         
         output_raw.mkdir(parents=True, exist_ok=True)
         writer_params = sp.writers.WriterConfig(
-            output_dir=output.with_name(output_raw.name),
+            output_dir=output_raw,
             overwrite=True,
             start_index=0,
             end_index=len(captured_data) - 1,
         )
-        for step in range(len(captured_data)):
-            writer.write_data(step, render_product=captured_data[step])
-        print("captured new scene")
+        with sp.writers.TFRecordWriter(writer_params, None) as writer:
+            for step in range(len(captured_data)):
+                writer.write_data(step, render_product=captured_data[step])
+        print("Captured and stored new set of raw images")
         
         
     if label:
@@ -176,6 +184,14 @@ async def async_main(capture: bool,label:bool, output: Path) -> None:
 
 
         # 3) reconstruct
+        files = os.listdir(output_raw.joinpath("data"))
+        tfrecord_file = None
+        for filename in files:
+            if filename.endswith(".tfrecord"):
+                tfrecord_file = filename
+        match = re.search(r'_(\d+)\.tfrecord$', tfrecord_file)
+        total = int(match.group(1))
+
         tfds = sp.data.TFRecordDataset
         dataset = tfds.get(
             output.with_name(output.name + "_raw"),
@@ -201,10 +217,14 @@ async def async_main(capture: bool,label:bool, output: Path) -> None:
             output_dir=output,
             overwrite=True,
             start_index=0,
-            end_index=len(trajectory) - 1,  # AS LONG AS THE RECORDED DATASET
+            end_index=total,  # AS LONG AS THE RECORDED DATASET
         )
+
+        
+
+
         with sp.writers.TFRecordWriter(writer_params, None) as writer:
-            for step, data in tqdm(dataset, total=len(trajectory), desc="Analyzing..."):
+            for step, data in tqdm(dataset, total=total, desc="Analyzing..."):
                 cam_pose = np.eye(4)
                 cam_pose[:3, 3] = data[tfds.CAM_LOCATION].numpy()
                 cam_pose[:3, :3] = R.from_quat(data[tfds.CAM_ROTATION].numpy()).as_matrix()

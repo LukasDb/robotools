@@ -61,22 +61,22 @@ async def async_main(capture: bool,label:bool, output: Path) -> None:
         thetas=np.linspace(30,160 , 6, endpoint=False).tolist(),
         pitchs=[40, 55, 65, 75],
         radius=[0.3],
-        center_point=(0.83, 0, -0.16),
-        view_jitter=(5, 5, 120),
+        center_point=(0.83, 0, -0.06),
+        view_jitter=(5, 5, 5),
     )
     trajectory += SphericalTrajectory(
         thetas=np.linspace(200,330 , 6, endpoint=False).tolist(),
         pitchs=[40, 55, 65, 75],
         radius=[0.3],
-        center_point=(0.83, 0, -0.16),
-        view_jitter=(5, 5, 120),
+        center_point=(0.83, 0, -0.06),
+        view_jitter=(5, 5, 5),
     )
     trajectory += CartesianTrajectory(
             (180, 0, 90),
             np.linspace(0.83 - 0.1, 0.83 + 0.1, 3).tolist(), 
             np.linspace(-0.3, 0.3, 3).tolist(),
             0.5,
-            view_jitter=(5, 5, 120),
+            view_jitter=(5, 5, 5),
         )
 
     if capture:
