@@ -26,8 +26,8 @@ from robotools.geometry import (
 async def async_main(save: bool,display: bool,capture: bool, output: Path) -> None:
     scene = rt.Scene()
     scene.from_config(yaml.safe_load(open("scene_combined.yaml"))) # make sure to have the right calibration file
-    #cam: rt.camera.Camera = scene._entities["ZED-M"]
-    cam: rt.camera.Camera = scene._entities["Realsense_121622061798"]
+    cam: rt.camera.Camera = scene._entities["ZED-M"]
+    #cam: rt.camera.Camera = scene._entities["Realsense_121622061798"]
     bg: rt.utility.BackgroundMonitor = scene._entities["Background Monitor"]
     
    
@@ -38,7 +38,7 @@ async def async_main(save: bool,display: bool,capture: bool, output: Path) -> No
     image_array = np.load(str(output.joinpath("frames.npy")))
     w2m = bg.get_pose()
     #variables
-    output_lines =["All distance parameters are given in meters, all rotation parameters in degrees.\nAlways raw - refined \n"]
+    output_lines =[f"{cam.name}\n All distance parameters are given in meters, all rotation parameters in degrees.\nAlways raw - refined \n"]
 
     #extract coordinates
     x_raw = w2c_array_raw[:, 0, 3] 
@@ -67,12 +67,14 @@ async def async_main(save: bool,display: bool,capture: bool, output: Path) -> No
         Ry_diff[step] = euler_combined[1]
         Rz_diff[step] = euler_combined[2]
         
-        text_out = step
+        text_out = (f" The Differences for step {step} are: \n Euler angels (xyz):")
         print(text_out)
         output_lines.append(f"{text_out}")
         text_out = euler_combined
         print(text_out)
         output_lines.append(f"{text_out}")
+        text_out = (f"Cartesian differences (xyz):\n  {x_raw[step]-x_refined[step]} {y_raw[step]-y_refined[step]} {z_raw[step]-z_refined[step]}" )
+        output_lines.append(text_out)
 
 
         

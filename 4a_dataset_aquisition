@@ -100,7 +100,12 @@ async def async_main(capture: bool,label:bool, output: Path) -> None:
                 #recallibrate
                 world2robot = await robot.get_pose()
                 world2cam_raw = world2robot @ cam.calibration.extrinsic_matrix
-                bg.set_to_charuco()
+                bg.set_to_charuco(
+                chessboard_size=calibrator.chessboard_size,
+                marker_size=calibrator.marker_size,
+                n_markers=calibrator.n_markers,
+                charuco_dict=calibrator.aruco_dict,
+                )
                 time.sleep(1)
                 frame = cam.get_frame()
                 img = frame.rgb
@@ -118,12 +123,23 @@ async def async_main(capture: bool,label:bool, output: Path) -> None:
                         #get frame
                         
                         frame = cam.get_frame()             
+                        rgb=frame.rgb
+                        rgb = rgb.copy()
+                        rgb_R=frame.rgb_R
+                        rgb_R = rgb_R.copy
+                        depth = frame.depth
+                        depth = depth.copy()
+                        depth_R = frame.depth_R
+                        depth_R = depth_R.copy()
+
+
+
                         rp = sp.RenderProduct(
-                            rgb=frame.rgb,
-                            rgb_R=frame.rgb_R,
-                            depth=frame.depth,
-                            depth_R=frame.depth_R,
-                            intrinsics=cam.calibration.intrinsic_matrix,
+                            rgb=rgb,
+                            rgb_R= rgb_R,
+                            depth=depth,
+                            depth_R=depth_R,
+                            intrinsics=cam_RS.calibration.intrinsic_matrix,
                             cam_position=cam_pos,
                             cam_quat_xyzw=cam_rot,
                         )  

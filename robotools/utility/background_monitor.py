@@ -25,11 +25,11 @@ class BackgroundMonitor(rt.Entity):
     with coordinate system as if it was a cv2 image
     """
 
-    def __init__(self) -> None:
-        rt.Entity.__init__(self, "Background Monitor")
+    def __init__(self,name:str = 'Default_BG_Name') -> None:
+        super().__init__(name = name)
         # get secondary monitor info
-        self.window = tk.Tk()
-        self.window.title("Background Monitor -> MOVE THIS WINDOW TO SECONDARY MONITOR")
+        self.window = tk.Toplevel()
+        self.window.title(f"{self.name} -> MOVE THIS WINDOW TO SECONDARY MONITOR")
 
         self._is_demo_mode = False
         # create fullscreen canvas
@@ -58,7 +58,9 @@ class BackgroundMonitor(rt.Entity):
         return out
 
     def from_config(self, config: dict) -> None:
-        return super().from_config(config)
+        super().from_config(config)
+        self.window.title(f"{self.name} -> MOVE THIS WINDOW TO SECONDARY MONITOR")
+        return
     
     def _get_current_monitor(self) -> screeninfo.Monitor | DemoMonitor:
         if self._is_demo_mode:

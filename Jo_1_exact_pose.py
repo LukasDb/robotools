@@ -34,8 +34,8 @@ async def async_main(display: bool,capture: bool,save:bool, output: Path) -> Non
     scene.from_config(yaml.safe_load(open("scene_combined.yaml"))) # make sure to have the right calibration file
 
     # extract names from scene_combined.yaml
-    #cam: rt.camera.Camera = scene._entities["ZED-M"]
-    cam: rt.camera.Camera = scene._entities["Realsense_121622061798"]
+    cam: rt.camera.Camera = scene._entities["ZED-M"]
+    #cam: rt.camera.Camera = scene._entities["Realsense_121622061798"]
     bg: rt.utility.BackgroundMonitor = scene._entities["Background Monitor"]
     robot: rt.robot.Robot = scene._entities["crx"]
     
@@ -52,17 +52,31 @@ async def async_main(display: bool,capture: bool,save:bool, output: Path) -> Non
     executor = TrajectoryExecutor()
     #generate trajectory
     trajectory = SphericalTrajectory(
-        thetas=np.linspace(30,160 , 6, endpoint=False).tolist(),
+        thetas=np.linspace(30,160 , 8, endpoint=False).tolist(),
         pitchs=[40, 55, 65, 75],
         radius=[0.3],
+        center_point=(0.83, 0, -0.16),
+        view_jitter=(5, 5, 5),
+    )
+    trajectory += SphericalTrajectory(
+        thetas=np.linspace(45, 315, 8, endpoint=True).tolist(),
+        pitchs=[45, 70],
+        radius=[0.35],
+        center_point=(0.83, 0, -0.16),
+        view_jitter=(5, 5, 5),
+    )
+    trajectory += SphericalTrajectory(
+        thetas=np.linspace(60, 300, 8, endpoint=True).tolist(),
+        pitchs=[60],
+        radius=[0.45],
         center_point=(0.83, 0, -0.16),
         view_jitter=(5, 5, 5),
     )
     
     trajectory += CartesianTrajectory(
             (180, 0, 90),
-            np.linspace(0.83 - 0.1, 0.83 + 0.1, 3).tolist(), 
-            np.linspace(-0.25, 0.25, 3).tolist(),
+            np.linspace(0.83 - 0.1, 0.83 + 0.1, 4).tolist(), 
+            np.linspace(-0.25, 0.25, 4).tolist(),
             0.5,
             view_jitter=(5, 5, 5),
         )
@@ -83,13 +97,8 @@ async def async_main(display: bool,capture: bool,save:bool, output: Path) -> Non
         n_markers=calibrator.n_markers,
         charuco_dict=calibrator.aruco_dict,
         )
-    # have a thread running to combat Realsense timing issues
-    stop_thread = threading.Event()
-    if cam.name == "Realsense_121622061798":
-        stop_thread.clear()
-        thread = threading.Thread(target=worker,args=(cam, stop_thread))
-        thread.start()
-
+   
+   
 
     #drive the robot along the trajectory, take a picture at each positon, save both the robot and the position
     output.mkdir(parents=True, exist_ok=True)
@@ -97,6 +106,7 @@ async def async_main(display: bool,capture: bool,save:bool, output: Path) -> Non
         time.sleep(2)
         frame = cam.get_frame()
         img = frame.rgb
+        img = img.copy()
         cv2.imshow("Preview", img[::2, ::2, ::-1])
         cv2.waitKey(1)
         world2robot = await robot.get_pose()
@@ -117,7 +127,7 @@ async def async_main(display: bool,capture: bool,save:bool, output: Path) -> Non
             w2c_array_refined.append(world2cam_refined)
             w2c_array_raw.append(world2cam_raw)
             image_array.append(img)
-            cv2.imwrite(str(output.joinpath(f"Cal of pic{step:03}.png")), img)
+            #cv2.imwrite(str(output.joinpath(f"Cal of pic{step:03}.png")), img)
         
         print(step)
     
@@ -125,7 +135,6 @@ async def async_main(display: bool,capture: bool,save:bool, output: Path) -> Non
     np.save(str(output.joinpath("world2cam_array_raw.npy")),w2c_array_raw)
     np.save(str(output.joinpath("world2cam_array_refined.npy")),w2c_array_refined)
     np.save(str(output.joinpath("frames.npy")),image_array)
-    stop_thread.set()
     print("Done")
     
 
@@ -148,18 +157,6 @@ def display_camera_poses(transformations,trajectory):
 
     o3d.visualization.draw_geometries(vis)
 
-def worker(cam,stop_signal):
-    print("Started fetching thread")
-    while not stop_signal.is_set():
-        buffer = cam.get_frame()
-        buffer = None
-
-
-
-
-
-
-     
 
 
 @click.command()

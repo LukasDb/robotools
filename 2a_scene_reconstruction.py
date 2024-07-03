@@ -20,24 +20,21 @@ import time
 import simpose as sp
 import robotools as rt
 from robotools.trajectory import SphericalTrajectory, TrajectoryExecutor, CartesianTrajectory
-from robotools.camera import Realsense, HandeyeCalibrator, zed, live_recal
+
 
 async def async_main(capture: bool, output: Path) -> None:
     scene = rt.Scene()
     scene.from_config(yaml.safe_load(open("scene_combined.yaml"))) # make sure to have the right calibration file
 
     # extract names from scene.yaml
-    cam_RS: rt.camera.Camera = scene._entities["Realsense_121622061798"] 
+    cam_RS: rt.camera.Camera = scene._entities["Realsense_121622061798"]
+    
     cam_ZED: rt.camera.Camera = scene._entities["ZED-M"]
     
+
     bg: rt.utility.BackgroundMonitor = scene._entities["Background Monitor"]
-    projector: rt.utility.BackgroundMonitor = scene._entities["Background Monitor"]
     robot: rt.robot.Robot = scene._entities["crx"]
-
-    calibrator = HandeyeCalibrator()
-    world2marker = bg.get_pose()
-
-    
+    output_buffer = output
 
     trajectory = SphericalTrajectory(
         thetas=np.linspace(45, 315, 8, endpoint=True).tolist(),
@@ -76,160 +73,137 @@ async def async_main(capture: bool, output: Path) -> None:
         )  
 
     
-    if True:
+    if capture:
         executor = TrajectoryExecutor()
         trajectory.visualize()
         
         
-        input("Please move the window to the background screen and press enter")
+        input("Please move the window to the second screen and press enter")
         bg.setup_window()
-        input("Please move the window to the projector screen and press enter")
-        projector.setup_window()
-
           # 2) acquire
         
-        projector.set_to_black()
         bg.set_to_black()       
-        
-        captured_data = []              #buffer for captured data
-        with sp.writers.TFRecordWriter(writer_params, None) as writer:
-            print("Starting capturing with Realsense...")
-            input("Please turn on the ceiling lights and press enter")
-            async for step in executor.execute(robot, trajectory, cam=cam_RS):
-                #recallibrate
-                world2robot = await robot.get_pose()
-                world2cam_raw = world2robot @ cam_RS.calibration.extrinsic_matrix
-                bg.set_to_charuco()
-                time.sleep(1)
-                frame = cam_RS.get_frame()
-                img = frame.rgb
-                retval, world2cam_refined = live_recal.charucoPnP(calibrator, cam_RS, img, world2cam_raw, world2marker)
-                if retval:
-                    diff = world2cam_raw @ invert_homogeneous(world2cam_refined)
-                    
-                    if np.max(np.abs(diff)) < 2:
-                        bg.set_to_black()
-                        time.sleep(1)
-
-                        cam_rot = R.from_matrix(world2cam_refined[:3, :3]).as_quat()
-                        cam_pos = world2cam_refined[:3, 3]
-
-                        #get frame
-                        
-                        frame = cam_RS.get_frame()             
-                        rp = sp.RenderProduct(
-                            rgb=frame.rgb,
-                            rgb_R=frame.rgb_R,
-                            depth=frame.depth,
-                            depth_R=frame.depth_R,
-                            intrinsics=cam_RS.calibration.intrinsic_matrix,
-                            cam_position=cam_pos,
-                            cam_quat_xyzw=cam_rot,
-                        )
-                        captured_data.append(rp)  #dynamically store captured data
-                        
-                    else:
-                        print("the offset between the two position values was too big")
-       
-        projector.set_to_depth_texture()      
-        
-        with sp.writers.TFRecordWriter(writer_params, None) as writer:
-            print("Starting capturing with Realsense...")
-            input("Please turn OFF the ceiling lights and press enter")
-            async for step in executor.execute(robot, trajectory, cam=cam_RS):
-                #recallibrate
-                world2robot = await robot.get_pose()
-                world2cam_raw = world2robot @ cam_RS.calibration.extrinsic_matrix
-                bg.set_to_charuco()
-                time.sleep(1)
-                frame = cam_RS.get_frame()
-                img = frame.rgb
-                retval, world2cam_refined = live_recal.charucoPnP(calibrator, cam_RS, img, world2cam_raw, world2marker)
-                if retval:
-                    diff = world2cam_raw @ invert_homogeneous(world2cam_refined)
-                    #there could be an error because of this. In case that happens,we need
-                    if np.max(np.abs(diff)) < 2:
-                        bg.set_to_black()
-                        time.sleep(1)
-
-                        cam_rot = R.from_matrix(world2cam_refined[:3, :3]).as_quat()
-                        cam_pos = world2cam_refined[:3, 3]
-
-                        #get frame                        
-                        frame = cam_RS.get_frame()             
-                        rp = sp.RenderProduct(
-                            rgb=frame.rgb,
-                            rgb_R=frame.rgb_R,
-                            depth=frame.depth,
-                            depth_R=frame.depth_R,
-                            intrinsics=cam_RS.calibration.intrinsic_matrix,
-                            cam_position=cam_pos,
-                            cam_quat_xyzw=cam_rot,
-                        )  
-                        captured_data.append(rp)
-                    else:
-                        print("the offset between the two position values was too big")
-
-
-        
-        projector.set_to_depth_texture()
-        with sp.writers.TFRecordWriter(writer_params, None) as writer:
-            print("Starting capturing with ZED and Pattern...")
-            input("Make sure the ceiling lights are turned OFF and press enter")
-            async for step in executor.execute(robot, trajectory, cam=cam_ZED):
-                #recallibrate
-                world2robot = await robot.get_pose()
-                world2cam_raw = world2robot @ cam_ZED.calibration.extrinsic_matrix
-                bg.set_to_charuco()
-                time.sleep(1)
-                frame = cam_ZED.get_frame()
-                img = frame.rgb
-                retval, world2cam_refined = live_recal.charucoPnP(calibrator, cam_ZED, img, world2cam_raw, world2marker)
-                if retval:
-                    diff = world2cam_raw @ invert_homogeneous(world2cam_refined)
-                    #there could be an error because of this. In case that happens,we need
-                    if np.max(np.abs(diff)) < 2:
-                        bg.set_to_black()
-                        time.sleep(1)
-
-                        cam_rot = R.from_matrix(world2cam_refined[:3, :3]).as_quat()
-                        cam_pos = world2cam_refined[:3, 3]
-
-                        #get frame
-                        
-                        frame = cam_RS.get_frame()             
-                        rp = sp.RenderProduct(
-                            rgb=frame.rgb,
-                            rgb_R=frame.rgb_R,
-                            depth=frame.depth,
-                            depth_R=frame.depth_R,
-                            intrinsics=cam_RS.calibration.intrinsic_matrix,
-                            cam_position=cam_pos,
-                            cam_quat_xyzw=cam_rot,
-                        )  
-                        captured_data.append(rp)
-                    else:
-                        print("the offset between the two position values was too big")
-        
+        output = output_buffer / 'RSnP'
         output.mkdir(parents=True, exist_ok=True)
         writer_params = sp.writers.WriterConfig(
             output_dir=output,
             overwrite=True,
             start_index=0,
-            end_index=len(captured_data) - 1,
+            end_index=len(trajectory) - 1,
         )
-        for step in range(len(captured_data)):
-            writer.write_data(step, render_product=captured_data[step])
-        projector.set_to_black()
-      
+        with sp.writers.TFRecordWriter(writer_params, None) as writer:
+            print("Starting capturing with Realsense...")
+            input("Please turn on the ceiling lights and press enter")
+            async for step in executor.execute(robot, trajectory, cam=cam_RS):
+                cam_pose = await robot.get_pose() @ cam_RS.calibration.extrinsic_matrix
+                cam_rot = R.from_matrix(cam_pose[:3, :3]).as_quat()
+                cam_pos = cam_pose[:3, 3]
+                
+                frame = cam_RS.get_frame()             
+                rp = sp.RenderProduct(
+                    rgb=frame.rgb,
+                    rgb_R=frame.rgb_R,
+                    depth=frame.depth,
+                    depth_R=frame.depth_R,
+                    intrinsics=cam_RS.calibration.intrinsic_matrix,
+                    cam_position=cam_pos,
+                    cam_quat_xyzw=cam_rot,
+                )  
+                writer.write_data(step, render_product=rp)
+        bg.set_to_depth_texture()      
+        output = output_buffer / 'RSP'
+        output.mkdir(parents=True, exist_ok=True)
+        writer_params = sp.writers.WriterConfig(
+            output_dir=output,
+            overwrite=True,
+            start_index=0,
+            end_index=len(trajectory) - 1,
+        )
+        with sp.writers.TFRecordWriter(writer_params, None) as writer:
+            print("Starting capturing with Realsense...")
+            input("Please turn OFF the ceiling lights and press enter")
+            async for step in executor.execute(robot, trajectory, cam=cam_RS):
+                cam_pose = await robot.get_pose() @ cam_RS.calibration.extrinsic_matrix
+                cam_rot = R.from_matrix(cam_pose[:3, :3]).as_quat()
+                cam_pos = cam_pose[:3, 3]
+                
+                frame = cam_RS.get_frame()             
+                rp = sp.RenderProduct(
+                    rgb=frame.rgb,
+                    rgb_R=frame.rgb_R,
+                    depth=frame.depth,
+                    depth_R=frame.depth_R,
+                    intrinsics=cam_RS.calibration.intrinsic_matrix,
+                    cam_position=cam_pos,
+                    cam_quat_xyzw=cam_rot,
+                )  
+                writer.write_data(step, render_product=rp)
+        
+        bg.set_to_depth_texture()
+        output = output_buffer / 'ZEDP'
+        output.mkdir(parents=True, exist_ok=True)
+        writer_params = sp.writers.WriterConfig(
+            output_dir=output,
+            overwrite=True,
+            start_index=0,
+            end_index=len(trajectory) - 1,
+        )
+        with sp.writers.TFRecordWriter(writer_params, None) as writer:
+            print("Starting capturing with ZED and Pattern...")
+            input("Make sure the ceiling lights are turned OFF and press enter")
+            async for step in executor.execute(robot, trajectory, cam=cam_ZED):
+                cam_pose = await robot.get_pose() @ cam_ZED.calibration.extrinsic_matrix
+                cam_rot = R.from_matrix(cam_pose[:3, :3]).as_quat()
+                cam_pos = cam_pose[:3, 3]
+                
+                frame = cam_ZED.get_frame()             
+                rp = sp.RenderProduct(
+                    rgb=frame.rgb,
+                    rgb_R=frame.rgb_R,
+                    depth=frame.depth,
+                    depth_R=frame.depth_R,
+                    intrinsics=cam_ZED.calibration.intrinsic_matrix,
+                    cam_position=cam_pos,
+                    cam_quat_xyzw=cam_rot,
+                )  
+                writer.write_data(step, render_product=rp)
+       
+        """bg.set_to_black()
+        output = output_buffer / 'ZEDnP'
+        output.mkdir(parents=True, exist_ok=True)
+        writer_params = sp.writers.WriterConfig(
+            output_dir=output,
+            overwrite=True,
+            start_index=0,
+            end_index=len(trajectory) - 1,
+        )
+        with sp.writers.TFRecordWriter(writer_params, None) as writer:
+            print("Starting capturing with ZED NO Pattern...")
+            input("Please turn ON the ceiling lights and press enter")
+            async for step in executor.execute(robot, trajectory, cam=cam_ZED):
+                cam_pose = await robot.get_pose() @ cam_ZED.calibration.extrinsic_matrix
+                cam_rot = R.from_matrix(cam_pose[:3, :3]).as_quat()
+                cam_pos = cam_pose[:3, 3]
+                
+                frame = cam_ZED.get_frame()             
+                rp = sp.RenderProduct(
+                    rgb=frame.rgb,
+                    rgb_R=frame.rgb_R,
+                    depth=frame.depth,
+                    depth_R=frame.depth_R,
+                    intrinsics=cam_ZED.calibration.intrinsic_matrix,
+                    cam_position=cam_pos,
+                    cam_quat_xyzw=cam_rot,
+                )  
+                writer.write_data(step, render_product=rp) """
     # 3) reconstruct
     # output = Path("~/data/real/occluded_cpsduck_realsense_121622061798").expanduser()
     # output = Path("~/data/real/single_cpsduck_realsense_121622061798").expanduser()
 
     tfds = sp.data.TFRecordDataset
-    output = output 
+    output = output_buffer / "RSnP"
     print(output)
-    dataset= tfds.get(
+    dataset_1 = tfds.get(
         output,
         get_keys=[
             tfds.CAM_LOCATION,
@@ -241,7 +215,45 @@ async def async_main(capture: bool, output: Path) -> None:
             tfds.DEPTH,
         ],
     ).enumerate()
-   
+    """ output = output_buffer / "RSP"
+    dataset_2 = tfds.get(
+        output,
+        get_keys=[
+            tfds.CAM_LOCATION,
+            tfds.CAM_ROTATION,
+            tfds.CAM_MATRIX,
+            tfds.OBJ_POS,
+            tfds.OBJ_ROT,
+            tfds.RGB,
+            tfds.DEPTH,
+        ],
+    ).enumerate()
+    output = output_buffer / "ZEDP"
+    dataset_3 = tfds.get(
+        output,
+        get_keys=[
+            tfds.CAM_LOCATION,
+            tfds.CAM_ROTATION,
+            tfds.CAM_MATRIX,
+            tfds.OBJ_POS,
+            tfds.OBJ_ROT,
+            tfds.RGB,
+            tfds.DEPTH,
+        ],
+    ).enumerate() """
+    """ output = output_buffer / "ZEDnP"
+    dataset_4 = tfds.get(
+        output,
+        get_keys=[
+            tfds.CAM_LOCATION,
+            tfds.CAM_ROTATION,
+            tfds.CAM_MATRIX,
+            tfds.OBJ_POS,
+            tfds.OBJ_ROT,
+            tfds.RGB,
+            tfds.DEPTH,
+        ],
+    ).enumerate() """
 
 
     # only select every nth image (for demo data)
@@ -252,7 +264,7 @@ async def async_main(capture: bool, output: Path) -> None:
     scene_integration = rt.SceneIntegration(use_color=True)
 
     if True: 
-        for i, data in tqdm(dataset, total=len(captured_data), desc="Reconstructing..."):
+        for i, data in tqdm(dataset_1, total=len(trajectory), desc="Reconstructing..."):
             t = data[tfds.CAM_LOCATION]
             r = R.from_quat(data[tfds.CAM_ROTATION].numpy())  # xyzw quaternion
             extrinsic = np.eye(4)
@@ -265,9 +277,46 @@ async def async_main(capture: bool, output: Path) -> None:
                 data[tfds.CAM_MATRIX].numpy(),
                 extrinsic,
             )
-        
-              
-        scene_integration.save(output.parent.joinpath("vbg.npz"))
+        f""" or i, data in tqdm(dataset_2, total=len(trajectory), desc="Reconstructing..."):
+            t = data[tfds.CAM_LOCATION]
+            r = R.from_quat(data[tfds.CAM_ROTATION].numpy())  # xyzw quaternion
+            extrinsic = np.eye(4)
+            extrinsic[:3, :3] = r.as_matrix()
+            extrinsic[:3, 3] = t.numpy()
+
+            scene_integration.integrate(
+                data[tfds.RGB].numpy(),
+                data[tfds.DEPTH].numpy(),
+                data[tfds.CAM_MATRIX].numpy(),
+                extrinsic,
+            )
+        for i, data in tqdm(dataset_3, total=len(trajectory), desc="Reconstructing..."):
+            t = data[tfds.CAM_LOCATION]
+            r = R.from_quat(data[tfds.CAM_ROTATION].numpy())  # xyzw quaternion
+            extrinsic = np.eye(4)
+            extrinsic[:3, :3] = r.as_matrix()
+            extrinsic[:3, 3] = t.numpy()
+
+            scene_integration.integrate(
+                data[tfds.RGB].numpy(),
+                data[tfds.DEPTH].numpy(),
+                data[tfds.CAM_MATRIX].numpy(),
+                extrinsic, 
+            )"""
+        """ for i, data in tqdm(dataset_4, total=len(trajectory), desc="Reconstructing..."):
+            t = data[tfds.CAM_LOCATION]
+            r = R.from_quat(data[tfds.CAM_ROTATION].numpy())  # xyzw quaternion
+            extrinsic = np.eye(4)
+            extrinsic[:3, :3] = r.as_matrix()
+            extrinsic[:3, 3] = t.numpy()
+
+            scene_integration.integrate(
+                data[tfds.RGB].numpy(),
+                data[tfds.DEPTH].numpy(),
+                data[tfds.CAM_MATRIX].numpy(),
+                extrinsic,
+            )    """         
+        scene_integration.save(output_buffer.parent.parent.joinpath("vbg.npz"))
     else:
         scene_integration.load()
 
@@ -290,7 +339,7 @@ async def async_main(capture: bool, output: Path) -> None:
     fig, axs = plt.subplots(n_prev, 3)
     mean_diffs = []
     outlier_ratios = []
-    for step, data in tqdm(dataset, total=len(captured_data), desc="Analyzing..."):
+    for step, data in tqdm(dataset, total=len(trajectory), desc="Analyzing..."):
         extrinsics = np.eye(4)
         extrinsics[:3, 3] = data[tfds.CAM_LOCATION].numpy()
         extrinsics[:3, :3] = R.from_quat(data[tfds.CAM_ROTATION].numpy()).as_matrix()

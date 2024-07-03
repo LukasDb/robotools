@@ -33,6 +33,9 @@ class Scene:
             # instanciate cls from cls name
             module = ".".join(cls_name.split(".")[:-2])
             cls: type[Entity] = getattr(importlib.import_module(module), cls_name.split(".")[-2])
+            name = config.get('name', cls_name)  # Default to cls_name if no name is provided
+            
             entity = cls()
+        
             entity.from_config(config)
             self.add_entity(entity)

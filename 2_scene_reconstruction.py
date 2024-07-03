@@ -73,7 +73,7 @@ async def async_main(capture: bool, output: Path) -> None:
         )  
 
     
-    if True:
+    if capture:
         executor = TrajectoryExecutor()
         trajectory.visualize()
         
