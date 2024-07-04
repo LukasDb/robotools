@@ -7,6 +7,7 @@ import asyncio
 import click
 from pathlib import Path
 from robotools.camera import HandeyeCalibrator
+import subprocess
 
 async def async_main(output:Path):
     scene = rt.Scene()
@@ -16,6 +17,7 @@ async def async_main(output:Path):
     duration = 3
     data = []
     calibrator = HandeyeCalibrator()
+    robot_mover = "Jo_3a_move_robot.py"
     
     input("Please move the window to the background screen and press enter")
     bg.setup_window()
@@ -30,14 +32,15 @@ async def async_main(output:Path):
         bg.set_to_black()
     
     input(f"This function will capture the robot pose for {duration} minutes and then write it to a file. Start by pressing enter")
+    subprocess.Popen(["python",robot_mover])
     time0 = time.time()
     while (time0 + 60*duration) > time.time():
         pose = await robot.get_pose()  # Ensure the coroutine is awaited
         time_array = np.array([time.time()-time0, 0, 0, 0])  # Create a time_array with current time and three zeros
         fused = np.column_stack((pose, time_array))  # Combine 4x4 pose with 4x1 time_array to form 4x5 array
         data.append(fused)
-        print(fused)
-        time.sleep(0.1)
+        #print(fused)
+        
     np.save("data/robot_tracking/robot_pose_data.npy", data)
     print("done")
 

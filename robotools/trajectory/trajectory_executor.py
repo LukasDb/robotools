@@ -40,7 +40,7 @@ class TrajectoryExecutor:
 
         logging.info("Reached home pose")
 
-        await asyncio.sleep(0.2)
+        #await asyncio.sleep(0.2)
 
         for idx_trajectory, pose in enumerate(trajectory):
             # generate randomized bg and lights settings, to be re-used for all cameras
@@ -50,7 +50,7 @@ class TrajectoryExecutor:
             logging.warning(f"Moving robot to {robot_target[:3,3]}")
             await robot.move_to(robot_target, timeout=30)
 
-            await asyncio.sleep(1.0)
+            #await asyncio.sleep(1.0)
 
             yield idx_trajectory
 

@@ -100,7 +100,10 @@ async def async_main(capture: bool, output: Path) -> None:
             #recallibrate
             world2robot = await robot.get_pose()
             world2cam_raw = world2robot @ cam_RS.calibration.extrinsic_matrix
-            bg.set_to_charuco(
+            bg.set_to_charuco(chessboard_size=calibrator.chessboard_size,
+                marker_size=calibrator.marker_size,
+                n_markers=calibrator.n_markers,
+                charuco_dict=calibrator.aruco_dict,
             )
             time.sleep(2)
             frame = cam_RS.get_frame()
