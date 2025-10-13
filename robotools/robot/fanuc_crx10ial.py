@@ -16,7 +16,7 @@ logging.getLogger("requests").setLevel(logging.WARNING)
 
 
 class FanucCRX10iAL(Robot):
-    ROBOT_IP = "192.168.1.100"
+    ROBOT_IP = "192.168.1.112"
 
     def __init__(self, name: str = "crx") -> None:
         super().__init__(name=name)
@@ -29,11 +29,12 @@ class FanucCRX10iAL(Robot):
         return super().to_config()
 
     async def move_to(self, pose: np.ndarray, timeout: float = 40.0) -> bool:
-        t_started = time.time()
+        # t_started = time.time()
         await self.send_move(pose)
         dist_to_target = 100.0
-        while dist_to_target > 0.001:
-            await asyncio.sleep(0.2)
+        while dist_to_target > 0.0001:
+            print(f"Distance to target: {dist_to_target}")
+            await asyncio.sleep(1)
             """ if time.time() - t_started > timeout:
                 await self.stop()
                 raise TargetNotReachedError(f"Move timed out after {timeout} seconds")
@@ -62,6 +63,28 @@ class FanucCRX10iAL(Robot):
             "linear_path": 0,
             "interrupt": 1 if interrupt else 0,
         }
+
+        # req = requests.get(url, params=http_params, timeout=10.0)
+        req = await self.session.get(url, params=http_params)
+
+        logging.debug(f"Answer: {req}")
+
+    
+    async def robotmotion_start(self, target_pose, interrupt: bool = False) -> None:
+        robot_http = "http://" + self.ROBOT_IP + "/KAREL/"
+        url = robot_http + "remotemotionstart"
+
+        target_6d = self.__mat_to_fanuc_6d(target_pose)
+
+        http_params = {
+            "x": target_6d[0],
+            "y": target_6d[1],
+            "z": target_6d[2],
+            "w": target_6d[3],
+            "p": target_6d[4],
+            "r": target_6d[5],
+        }
+        print("coordinates:",http_params)
 
         # req = requests.get(url, params=http_params, timeout=10.0)
         req = await self.session.get(url, params=http_params)
