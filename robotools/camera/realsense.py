@@ -1,5 +1,5 @@
 import cv2
-from .camera import Camera, CamFrame, HandeyeCalibration
+from .camera import Camera, CamFrame, GeneralCalibration
 import numpy as np
 import json
 from pathlib import Path
@@ -52,7 +52,7 @@ class Realsense(Camera):
     def __init__(
         self,
         serial_number: str | None = None,
-        calibration: HandeyeCalibration | None = None,
+        calibration: GeneralCalibration | None = None,
     ) -> None:
         super().__init__(f"Realsense_{serial_number}", calibration)
         if serial_number is not None:
@@ -82,6 +82,7 @@ class Realsense(Camera):
 
         config.enable_stream(rs.stream.depth, self.DEPTH_W, self.DEPTH_H, rs.format.z16, 30)  # type: ignore
         config.enable_stream(rs.stream.color, self.width, self.height, rs.format.rgb8, 30)  # type: ignore
+        print('Realsense width, height:', self.width, self.height)
         self.align_to_rgb = rs.align(rs.stream.color)  # type: ignore
 
         self.temporal_filter = rs.temporal_filter(  # type: ignore
@@ -102,7 +103,7 @@ class Realsense(Camera):
         if "D415" in device_name:
             profile_path = Path("realsense_profiles/d415_HQ.json")
         elif "D435" in device_name:
-            profile_path = Path("realsense_profiles/d435_HQ.json")
+            profile_path = Path("realsense_profiles/d435_DEFAULT.json")
 
         logging.debug(f"[{self.name}] Loading configuration: {profile_path.name}")
         rs.rs400_advanced_mode(self.device).load_json(profile_path.read_text())  # type: ignore

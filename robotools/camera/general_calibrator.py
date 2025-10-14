@@ -13,7 +13,7 @@ from robotools.geometry import (
     invert_homogeneous,
     get_affine_matrix_from_6d_vector,
 )
-from .camera import HandeyeCalibration, CamFrame
+from .camera import GeneralCalibration, CamFrame
 
 
 @dataclass
@@ -30,18 +30,21 @@ class DetectionDatapoint:
 
 @dataclass
 class CalibrationResult:
-    calibration: HandeyeCalibration
-    world2markers: np.ndarray
+    calibration: GeneralCalibration
+    world2markers: np.ndarray | None = None
+    ee_to_marker: np.ndarray | None = None
 
 
-class HandeyeCalibrator:
+
+class GeneralCalibrator:
 
     def __init__(
         self,
-        chessboard_size: float = 0.05,
-        marker_size: float = 0.04,
+        chessboard_size: float = 0.0175, # 0.0209, # ipad 0.0172
+        marker_size: float = 0.013, # 0.01552, # ipad 0.013
         n_markers=(13, 7),
         charuco_dict=aruco.DICT_ARUCO_MIP_36h12,
+        is_eye_to_hand: bool = False,
     ) -> None:
         self.aruco_dict = aruco.getPredefinedDictionary(charuco_dict)
         self.n_markers = n_markers
@@ -53,6 +56,7 @@ class HandeyeCalibrator:
         self.calibration_datapoints: list[DetectionDatapoint] = []
 
         self.charuco_detector = cv2.aruco.CharucoDetector(self.charuco_board)  # type: ignore
+        self.is_eye_to_hand = is_eye_to_hand
 
     def reset(self) -> None:
         self.calibration_datapoints = []
@@ -86,84 +90,113 @@ class HandeyeCalibrator:
         line.colors = o3d.utility.Vector3dVector([[1, 0, 0], [1, 0, 0]])
         return line
 
+
     def visualize_calibration(
-        self,
-        world2markers: np.ndarray,
-        extrinsics: np.ndarray,
-        intrinsics: np.ndarray,
-        dist_coeffs: np.ndarray,
-    ) -> None:
+            self,
+            world2markers: np.ndarray | None,     # required when is_eye_to_hand == False (W->M, fixed)
+            extrinsics: np.ndarray,               # if is_eye_to_hand==False: EE->C (E_C). If True: W->C (W_C)
+            intrinsics: np.ndarray,
+            dist_coeffs: np.ndarray,
+            ee_to_marker: np.ndarray | None = None,  # required when is_eye_to_hand==True (EE->M)
+        ) -> None:
+            origin = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.4)
+            vis = [origin]
 
-        origin = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.4)
-        markers = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.2)
-        markers.transform(world2markers)
-        vis = [origin, markers]
+            # --- Board fixed in world (original case) ---------------------------------
+            if not self.is_eye_to_hand:
+                # In this mode, extrinsics is EE->C
+                assert world2markers is not None, "world2markers must be provided when is_eye_to_hand=False"
+                assert extrinsics.shape == (4, 4), "extrinsics must be 4x4 (EE->C) when is_eye_to_hand=False"
+                E_C = extrinsics
 
-        vis.append(self.get_line_from_poses(np.eye(4), world2markers))
+                markers = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.2)
+                markers.transform(world2markers)
+                vis.append(markers)
+                vis.append(self.get_line_from_poses(np.eye(4), world2markers))
+                W_C_fixed = None
+                C_W_fixed = None
+            else:
+                # Eye-to-hand: camera fixed in world; extrinsics is W->C, board on EE
+                assert ee_to_marker is not None, "ee_to_marker (EE->M) must be provided when is_eye_to_hand=True"
+                assert extrinsics.shape == (4, 4), "extrinsics must be 4x4 (W->C) when is_eye_to_hand=True"
+                W_C_fixed = extrinsics              # world->camera (fixed)
+                C_W_fixed = invert_homogeneous(W_C_fixed)
+                E_C = None
 
-        for cal_result in self.calibration_datapoints:
-            world2robot = cal_result.robot_pose
-            world2cam = world2robot @ extrinsics
-            cam2markers = get_affine_matrix_from_6d_vector(
-                "Rodriguez", cal_result.estimated_pose6d
-            )
-            world2markers_cam = world2cam @ cam2markers
+            for cal_result in self.calibration_datapoints:
+                W_EE = cal_result.robot_pose
 
-            robot = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
-            robot.transform(world2robot)
-            camera = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
-            camera.transform(world2cam)
-            markers_cam = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
-            markers_cam.transform(world2markers_cam)
-            vis.append(robot)
-            vis.append(camera)
-            vis.append(markers_cam)
-            vis.append(self.get_line_from_poses(np.eye(4), world2robot))
-            vis.append(self.get_line_from_poses(world2robot, world2cam))
-            vis.append(self.get_line_from_poses(world2cam, world2markers_cam))
+                if self.is_eye_to_hand:
+                    # Camera static; marker moves with EE
+                    W_M = W_EE @ ee_to_marker            # world->marker (per image)
+                    world2cam = W_C_fixed                # world->camera (fixed)
+                    world2markers_i = W_M
 
-            # draw charuco
-            img = self.draw_detection(cal_result)
+                    # Optimized pose to draw (M->C)
+                    C_M_opt = C_W_fixed @ W_M            # camera->marker
+                else:
+                    # Camera on EE; marker fixed in world
+                    world2cam = W_EE @ E_C               # world->camera (per image)
+                    world2markers_i = world2markers
 
-            optimized = img.copy()
-            raw = img.copy()
+                    # Optimized pose to draw (M->C)
+                    C_M_opt = invert_homogeneous(world2cam) @ world2markers_i  # camera->marker
 
-            cv2.putText(optimized, "Optimized", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)  # type: ignore
-            cv2.putText(raw, "Raw", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)  # type: ignore
+                # ---- Open3D frames ----------------------------------------------------
+                robot = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
+                robot.transform(W_EE)
+                camera = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
+                camera.transform(world2cam)
+                vis.extend([robot, camera])
 
-            # draw optimized calibration result
-            cam2monitor = invert_homogeneous(cal_result.robot_pose @ extrinsics) @ world2markers
-            rvec, _ = cv2.Rodrigues(cam2monitor[:3, :3])  # type: ignore
-            tvec = cam2monitor[:3, 3]
-            optimized = cv2.drawFrameAxes(optimized, intrinsics, dist_coeffs, rvec, tvec, 0.1, 3)  # type: ignore
+                if world2markers_i is not None:
+                    markers_mesh = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
+                    markers_mesh.transform(world2markers_i)
+                    vis.append(markers_mesh)
+                    vis.append(self.get_line_from_poses(np.eye(4), W_EE))
+                    vis.append(self.get_line_from_poses(W_EE, world2cam))
+                    vis.append(self.get_line_from_poses(world2cam, world2markers_i))
 
-            # draw pose of this specific image
-            if cal_result.estimated_pose6d is not None:
-                mat = get_affine_matrix_from_6d_vector("Rodriguez", cal_result.estimated_pose6d)
-                rvec, _ = cv2.Rodrigues(mat[:3, :3])  # type: ignore
-                tvec = mat[:3, 3]
-                raw = cv2.drawFrameAxes(raw, intrinsics, dist_coeffs, rvec, tvec, 0.1, 3)  # type: ignore
+                # ---- Image overlays: RAW (PnP) vs OPTIMIZED ---------------------------
+                img = self.draw_detection(cal_result)
+                raw_img = img.copy()
+                opt_img = img.copy()
 
-                # estimated = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
-                # estimated.transform(cal_result.robot_pose @ extrinsics @ mat)
-                # # draw line from robot pose to estimated
-                # line = o3d.geometry.LineSet()
-                # line.points = o3d.utility.Vector3dVector([cal_result.robot_pose[:3, 3], tvec])
-                # line.lines = o3d.utility.Vector2iVector([[0, 1]])
-                # line.colors = o3d.utility.Vector3dVector([[1, 0, 0], [1, 0, 0]])
-                # vis.append(line)
-                # vis.append(estimated)
+                cv2.putText(raw_img, "Raw (PnP) M->C", (10, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)  # type: ignore
+                cv2.putText(opt_img, "Optimized (model) M->C", (10, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)  # type: ignore
 
-                print(f"optimized:\n{cam2monitor}\nvs per img:\n{mat}")
+                # RAW from ArUco/PnP: estimated_pose6d typically encodes M->C
+                M_C_raw = None
+                if cal_result.estimated_pose6d is not None:
+                    C_2_M_raw = get_affine_matrix_from_6d_vector("Rodriguez", cal_result.estimated_pose6d)
+                    rvec_raw, _ = cv2.Rodrigues(C_2_M_raw[:3, :3])  # type: ignore
+                    tvec_raw = C_2_M_raw[:3, 3]
+                    raw_img = cv2.drawFrameAxes(raw_img, intrinsics, dist_coeffs, rvec_raw, tvec_raw, 0.1, 3)  # type: ignore
 
-            # stack next to each other
-            annotated = np.hstack([raw, optimized])
+                # OPTIMIZED: draw M->C directly
+                rvec_opt, _ = cv2.Rodrigues(C_M_opt[:3, :3])  # type: ignore
+                tvec_opt = C_M_opt[:3, 3]
+                opt_img = cv2.drawFrameAxes(opt_img, intrinsics, dist_coeffs, rvec_opt, tvec_opt, 0.1, 3)  # type: ignore
 
-            cv2.imshow("Calibration", annotated[::2, ::2, ::-1])
-            key = cv2.waitKey(0)
-            if key == ord("q"):
-                break
-        o3d.visualization.draw_geometries(vis)
+                # Optional: print as C->M for numerical comparison + sanity check
+                if M_C_raw is not None:
+                    C_M_raw = invert_homogeneous(M_C_raw)
+                    print("RAW   C->M:\n", C_M_raw)
+                print("OPT   C->M:\n", C_M_opt)
+
+
+                annotated = np.hstack([raw_img, opt_img])
+                cv2.imshow("Calibration", annotated[::2, ::2, ::-1])
+                key = cv2.waitKey(0)
+                if key == ord("q"):
+                    break
+
+            o3d.visualization.draw_geometries(vis)
+
+
+
 
     def calibrate(self, extrinsic_guess: np.ndarray = np.eye(4)) -> CalibrationResult:
 
@@ -227,11 +260,31 @@ class HandeyeCalibrator:
             )
 
         logging.info("Done")
+        def invert_rvec_tvec(rvec: np.ndarray, tvec: np.ndarray):
+            # Ensure float64 and (3,1) shape
+            rvec = np.asarray(rvec, dtype=np.float64).reshape(3, 1)
+            tvec = np.asarray(tvec, dtype=np.float64).reshape(3, 1)
 
-        logging.info("Calibrating extrinsics...")
-        camera_poses = [
-            np.concatenate([tvec, rvec], axis=0)[:, 0] for tvec, rvec in zip(tvecs, rvecs)
-        ]
+            # rvec -> R
+            R, _ = cv2.Rodrigues(rvec)
+            # Invert pose
+            R_inv = R.T
+            t_inv = -R_inv @ tvec
+            # R_inv -> rvec_inv
+            rvec_inv, _ = cv2.Rodrigues(R_inv)
+            return rvec_inv, t_inv
+
+        # Building camera_poses for extrinsics:
+        if self.is_eye_to_hand:
+            camera_poses = []
+            for tvec, rvec in zip(tvecs, rvecs):
+                rvec_inv, tvec_inv = invert_rvec_tvec(rvec, tvec)
+                camera_poses.append(np.concatenate([tvec_inv, rvec_inv], axis=0)[:, 0])
+        else:
+            camera_poses = [
+                np.concatenate([tvec, rvec], axis=0)[:, 0] for tvec, rvec in zip(tvecs, rvecs)
+            ]
+
         ret = self._optimize_handeye_matrix(
             camera_poses, robot_poses, initial_guess=extrinsic_guess
         )
@@ -240,35 +293,36 @@ class HandeyeCalibrator:
         logging.info(f"Cost:       {ret['cost']}")
 
         x = ret["x"]
-        extrinsic_matrix = invert_homogeneous(get_affine_matrix_from_6d_vector("xyz", x[:6]))
-        print("Extrinsic matrix:\n", extrinsic_matrix)
-        world2markers = invert_homogeneous(get_affine_matrix_from_6d_vector("xyz", x[6:]))
 
-        # try OpenCV version
-        # R_gripper2base = [x[:3, :3] for x in robot_poses]
-        # t_gripper2base = [x[:3, 3] for x in robot_poses]
-        # R_target2cam = rvecs
-        # t_target2cam = tvecs
-        # R_cam2gripper, t_cam2gripper = cv2.calibrateHandEye(  # type: ignore
-        #     R_gripper2base,
-        #     t_gripper2base,
-        #     R_target2cam,
-        #     t_target2cam,
-        #     method=cv2.CALIB_HAND_EYE_TSAI,  # type: ignore
-        # )
-        # extrinsic_matrix = np.eye(4)
-        # extrinsic_matrix[:3, :3] = R_cam2gripper
-        # extrinsic_matrix[:3, 3] = np.reshape(t_cam2gripper, (3,))
-        # print("Extrinsic matrix:\n", extrinsic_matrix)
+        if self.is_eye_to_hand:
+            ee_to_marker = invert_homogeneous(get_affine_matrix_from_6d_vector("xyz", x[:6]))
+            print("EE to marker:\n", ee_to_marker)
+            extrinsic_matrix = invert_homogeneous(get_affine_matrix_from_6d_vector("xyz", x[6:]))
+            print("Extrinsic matrix:\n", extrinsic_matrix)
 
-        return CalibrationResult(
-            calibration=rt.camera.HandeyeCalibration(
-                intrinsic_matrix=camera_matrix,
-                dist_coeffs=dist_coefficients,
-                extrinsic_matrix=extrinsic_matrix,
-            ),
-            world2markers=world2markers,
-        )
+
+            return CalibrationResult(
+                calibration=rt.camera.GeneralCalibration(
+                    intrinsic_matrix=camera_matrix,
+                    dist_coeffs=dist_coefficients,
+                    extrinsic_matrix=extrinsic_matrix,
+                ),
+                ee_to_marker=ee_to_marker,
+            )
+        else:
+            extrinsic_matrix = invert_homogeneous(get_affine_matrix_from_6d_vector("xyz", x[:6]))
+            print("Extrinsic matrix:\n", extrinsic_matrix)
+            world2markers = invert_homogeneous(get_affine_matrix_from_6d_vector("xyz", x[6:]))
+
+
+            return CalibrationResult(
+                calibration=rt.camera.GeneralCalibration(
+                    intrinsic_matrix=camera_matrix,
+                    dist_coeffs=dist_coefficients,
+                    extrinsic_matrix=extrinsic_matrix,
+                ),
+                world2markers=world2markers,
+            )
 
     def _detect_charuco(self, img: np.ndarray, robot_pose: np.ndarray) -> DetectionDatapoint:
 

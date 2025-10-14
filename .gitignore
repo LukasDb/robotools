@@ -2,7 +2,8 @@
 *.npz
 *.png
 **/__pychache__/**
-data/
+data_eye_in_hand/
+data_eye_to_hand/
 *.yaml
 *.json
 *.npz

@@ -1,4 +1,4 @@
 
-from .camera import Camera, CamFrame, HandeyeCalibration
+from .camera import Camera, CamFrame, GeneralCalibration
 from .realsense import Realsense
-from .handeye_calibrator import HandeyeCalibrator
+from .general_calibrator import GeneralCalibrator

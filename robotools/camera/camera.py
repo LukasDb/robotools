@@ -17,7 +17,7 @@ class CamFrame:
 
 
 @dataclass
-class HandeyeCalibration:
+class GeneralCalibration:
     intrinsic_matrix: npt.NDArray[np.float64]
     dist_coeffs: npt.NDArray[np.float64]
     extrinsic_matrix: npt.NDArray[np.float64]
@@ -29,11 +29,12 @@ class HandeyeCalibration:
             "extrinsic_matrix": self.extrinsic_matrix.tolist(),
         }
 
-    def from_config(self, config: dict) -> "HandeyeCalibration":
+    def from_config(self, config: dict) -> "GeneralCalibration":
         self.intrinsic_matrix = np.array(config["intrinsic_matrix"])
         self.dist_coeffs = np.array(config["dist_coeffs"])
         self.extrinsic_matrix = np.array(config["extrinsic_matrix"])
         return self
+
 
 
 class Camera(AsyncEntity, ABC):
@@ -43,11 +44,11 @@ class Camera(AsyncEntity, ABC):
     def __init__(
         self,
         name: str,
-        calibration: HandeyeCalibration | None = None,
+        calibration: GeneralCalibration | None = None,
     ):
         AsyncEntity.__init__(self, name)
 
-        self.calibration: HandeyeCalibration | None = calibration
+        self.calibration: GeneralCalibration | None = calibration
 
     def to_config(self) -> dict:
         out = super().to_config()
@@ -59,7 +60,7 @@ class Camera(AsyncEntity, ABC):
         if config["calibration"] == "none":
             calibration = None
         else:
-            calibration = HandeyeCalibration(np.eye(4), np.eye(1), np.eye(4)).from_config(
+            calibration = GeneralCalibration(np.eye(4), np.eye(1), np.eye(4)).from_config(
                 config["calibration"]
             )
         self.calibration = calibration

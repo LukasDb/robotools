@@ -11,7 +11,7 @@ import click
 import asyncio
 
 import robotools as rt
-from robotools.camera import Realsense, HandeyeCalibrator, zed
+from robotools.camera import Realsense, GeneralCalibrator, zed
 from robotools.trajectory import SphericalTrajectory, TrajectoryExecutor, CartesianTrajectory
 from robotools.robot import FanucCRX10iAL
 
@@ -21,50 +21,46 @@ import logging
 coloredlogs.install(level="DEBUG")
 
 
-async def async_main(capture: bool, output: Path) -> None:
+async def async_main(capture: bool, output: Path, is_eye_to_hand:bool = False) -> None:
     scene = rt.Scene()
 
     robot: FanucCRX10iAL = scene.add_entity(FanucCRX10iAL())
     cam: Realsense = scene.add_entity(Realsense.get_available_devices()[0])
-    #cam: zed = scene.add_entity(zed.ZedCamera.get_available_devices()[0])
-    bg = scene.add_entity(rt.utility.BackgroundMonitor())
 
-    calibrator = HandeyeCalibrator()
+    calibrator = GeneralCalibrator(is_eye_to_hand=is_eye_to_hand)
     extrinsic_guess = np.eye(4)
-    extrinsic_guess[:3, :3] = R.from_euler("zx", [-90, -5], degrees=True).as_matrix()
+    extrinsic_guess[:3, :3] = R.from_euler("xz", [-18,180], degrees=True).as_matrix()
     print("extrinsic guess:\n", extrinsic_guess)
+
     # 2) acquire
     if capture:
         executor = TrajectoryExecutor()
-        trajectory = SphericalTrajectory(
-            thetas=np.linspace(60, 300, 8, endpoint=True).tolist(),
-            pitchs=[50, 70],
-            radius=[0.45],
-            center_point=(0.83, 0, -0.16),
-            view_jitter=(5, 5, 5),
-        )
-        trajectory += CartesianTrajectory(
-            (180, 0, 90),
-            np.linspace(0.83 - 0.1, 0.83 + 0.1, 3).tolist(), 
-            np.linspace(-0.3, 0.3, 6).tolist(),
-            0.5,
-            view_jitter=(5, 5, 5),
-        )
+        if is_eye_to_hand:
+
+            trajectory = SphericalTrajectory(
+                thetas=np.linspace(-45,25, 12, endpoint=True).tolist(),
+                pitchs=[55, 65],
+                radius=[0.35, 0.45],
+                center_point=(0.5, -0.3, -0.2),
+                view_jitter=(5,5,5),
+            )
+        else:
+            trajectory = SphericalTrajectory(
+                thetas=np.linspace(-30,110, 6, endpoint=True).tolist(),
+                pitchs=[55,65, 70],
+                radius=[0.35, 0.50],
+                center_point=(0.65, -0.3, -0.2),
+                view_jitter=(5,5,5),
+            )
+
 
         trajectory.transform(extrinsic_guess, local=True)
 
-        #trajectory.visualize()
+        trajectory.visualize()
 
-        # wait for user to move window to second screen
-        input("Please move the window to the second screen and press enter")
-
-        bg.setup_window()
-        bg.set_to_charuco(
-            chessboard_size=calibrator.chessboard_size,
-            marker_size=calibrator.marker_size,
-            n_markers=calibrator.n_markers,
-            charuco_dict=calibrator.aruco_dict,
-        )
+        home_pose = await robot.get_pose()
+        print("Home position:",home_pose)
+        await robot.robotmotion_start(home_pose)
 
         output.mkdir(parents=True, exist_ok=True)
         async for step in executor.execute(robot, trajectory, cam=cam):
@@ -84,23 +80,39 @@ async def async_main(capture: bool, output: Path) -> None:
         cv2.waitKey(1)
 
     result = calibrator.calibrate(extrinsic_guess=extrinsic_guess)
-    bg.set_pose(result.world2markers)
+
     cam.calibration = result.calibration
     yaml.dump(scene.to_config(), open("scene.yaml", "w"))
 
-    calibrator.visualize_calibration(
-        world2markers=result.world2markers,
-        extrinsics=result.calibration.extrinsic_matrix,
-        intrinsics=result.calibration.intrinsic_matrix,
-        dist_coeffs=result.calibration.dist_coeffs,
-    )
+    if is_eye_to_hand:
+        calibrator.visualize_calibration(
+            world2markers=None,
+            extrinsics=result.calibration.extrinsic_matrix,   # W_C (world->camera)
+            intrinsics=result.calibration.intrinsic_matrix,
+            dist_coeffs=result.calibration.dist_coeffs,
+            ee_to_marker=result.ee_to_marker,                 # EE->Marker
+        )
+    else:
+        calibrator.visualize_calibration(
+            world2markers=result.world2markers,               # W->Marker
+            extrinsics=result.calibration.extrinsic_matrix,   # EE->Camera (original case)
+            intrinsics=result.calibration.intrinsic_matrix,
+            dist_coeffs=result.calibration.dist_coeffs,
+        )
 
 
 @click.command()
 @click.option("--capture", is_flag=True)
-@click.option("--output", type=click.Path(path_type=Path), default="data/calibration")
-def main(capture: bool, output: Path):
-    asyncio.run(async_main(capture, output))
+@click.option("--is_eye_in_hand", is_flag=True)
+
+def main(capture: bool, is_eye_in_hand: bool) -> None:
+
+    if is_eye_in_hand:
+        output = Path("data_eye_in_hand/calibration")
+    else:
+        output = Path("data_eye_to_hand/calibration")
+
+    asyncio.run(async_main(capture, output, is_eye_to_hand=not is_eye_in_hand))
 
 
 if __name__ == "__main__":
